@@ -14,6 +14,7 @@ import blpapi
 START_YEAR = 2000
 END_YEAR = 2021
 
+# Start a Bloomberg session
 session = blpapi.Session(options=blpapi.SessionOptions(host='localhost', port=8194))  # Start a Bloomberg session
 session.start()
 
@@ -31,7 +32,9 @@ fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH', 'RETURN_COM_EQY', 'CF_FRE
 years = range(START_YEAR, END_YEAR)  # Sample period
 
 def event_loop(session):
-    # Event Loop
+    """
+    An event loop to wait for the response from the Bloomberg API.
+    """
     while True:
         event = session.nextEvent()
         if event.eventType() == blpapi.Event.RESPONSE or \
@@ -45,8 +48,10 @@ def fetch_field_data(field_data, field):
     except blpapi.NotFoundException:
         return np.nan
 
-# Get the data
 def get_data(tickers, fields, years):
+    """
+    Gets data from Bloomberg for the given tickers, fields and years.
+    """
     data_rows = []
     for ticker in tickers:
         request = ref_data_service.createRequest("ReferenceDataRequest")
@@ -97,10 +102,10 @@ def get_data(tickers, fields, years):
 
     return pd.DataFrame(data_rows)
 
-
-# Returns average risk free rate for each year in years as a dictionary
 def get_risk_free_rate(years = years):
-
+    """
+    Returns average risk free rate for each year in years as a dictionary
+    """
     risk_free_rates = {}
 
     request = ref_data_service.createRequest("ReferenceDataRequest")
@@ -141,11 +146,13 @@ def cap_and_floor(df, column, lower_percentile, upper_percentile):
     return df
 
 def process_factors(df):
-    # Calculate factors
+    """
+    Calculate factors and their normalized versions.
+    """
     df_copy = df.copy()
     df_copy['MarketPremium'] = df_copy.groupby('Ticker')['LastPrice'].pct_change() - df_copy['RiskFreeRate']
     df_copy['Size'] = df_copy['MarketCap']
-    df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']  # Book to market ratio
+    df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']  
     df_copy['Profitability'] = df_copy['ROE']
     df_copy['Investment'] = df_copy['FreeCashFlow'] / df_copy['MarketCap']
 
@@ -161,6 +168,7 @@ def process_factors(df):
 
     return df_copy
 
+# Get data
 df = get_data(tickers, fields, years)
 
 # Cap and floor outliers
@@ -217,9 +225,8 @@ y = df_grouped[target]
 # Split data into train and test sets
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
 
-# Do the regression
+# Initialize and fit model
 rf = RandomForestRegressor(n_estimators=100, random_state=42)
-
 rf.fit(x_train, y_train)
 
 y_pred = rf.predict(x_test)
@@ -231,6 +238,8 @@ r2 = r2_score(y_test, y_pred)
 print(f'Feature importance: {rf.feature_importances_}')
 print(f'MSE: {mse}')
 print(f'R-squared: {r2}')
+
+# Generate plots
 
 # Feature importance plot
 plt.figure(figsize=(10, 6))
