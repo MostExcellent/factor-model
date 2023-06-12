@@ -12,6 +12,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 # The Bloomberg API
 import blpapi
+# To load the data from csv
+import os
 
 START_YEAR = 2010
 END_YEAR = 2021
@@ -226,8 +228,18 @@ def process_factors(df):
 
     return df_copy
 
-# Get data
-df = get_data(fields, years)
+# Load data from csv if it exists, else fetch from Bloomberg API
+csv_file = 'data.csv'
+# Check if the file exists
+if os.path.isfile(csv_file):
+    # Read from the file
+    df = pd.read_csv(csv_file)
+else:
+    # Fetch data from the Bloomberg API
+    df = get_data(fields, years)
+    # Save to csv to avoid making API calls again in the future
+    df.to_csv(csv_file, index=False)
+
 
 # Cap and floor outliers
 df = cap_and_floor(df, 'LastPrice', 0.01, 0.99)
@@ -265,8 +277,8 @@ df_grouped = df.groupby(['Ticker', 'Year']).apply(process_factors)
 df_grouped.reset_index(inplace=True, drop=True)
 
 # Save to csv to avoid making API calls again in the future
-df_grouped.to_csv('data.csv')
-# TODO: add argument to read from csv if it exists
+csv_processed = 'processed_data.csv'
+df_grouped.to_csv(csv_processed, index=False)
 # TODO: stick this into a notebook
 
 # Now we do a regression
