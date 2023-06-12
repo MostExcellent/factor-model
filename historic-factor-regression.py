@@ -151,7 +151,7 @@ def process_factors(df):
     """
     df_copy = df.copy()
     df_copy['MarketPremium'] = df_copy.groupby('Ticker')['LastPrice'].pct_change() - df_copy['RiskFreeRate']
-    df_copy['Size'] = df_copy['MarketCap']
+    df_copy['Size'] = df_copy['MarketCap'] # This is incorrect, and is a plaholder until I implement CAPM
     df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']  
     df_copy['Profitability'] = df_copy['ROE']
     df_copy['Investment'] = df_copy['FreeCashFlow'] / df_copy['MarketCap']
