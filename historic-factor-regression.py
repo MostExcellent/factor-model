@@ -33,13 +33,11 @@ if not session.openService("//blp/refdata"):
 
 ref_data_service = session.getService("//blp/refdata")
 
-# No longer needed as we are getting the list of tickers dynamically from the index members each year
-# tickers = ['AAPL US Equity', 'GOOGL US Equity', 'MSFT US Equity', 'AMZN US Equity', 'META US Equity']  # Bloomberg format for tickers
 fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH', 'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']  # Bloomberg fields
 
 years = np.arange(START_YEAR, END_YEAR)  # Sample period
 
-def event_loop(session, timeout=5000):
+def event_loop(session, timeout=7000):
     """
     Creates an event loop that waits for a response from the session.
     """
