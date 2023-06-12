@@ -126,7 +126,8 @@ def get_data(fields, years, index=INDEX):
                     security_data_array = msg.getElement('securityData')
                 else:
                     continue
-            
+                
+                print(f'Processing {security_data_array.numValues()} securities')
                 for i in range(security_data_array.numValues()):
                     security_data = security_data_array.getValueAsElement(i)
                     field_exceptions = security_data.getElement('fieldExceptions')
@@ -139,7 +140,7 @@ def get_data(fields, years, index=INDEX):
 
                     last_price = fetch_field_data(field_data, 'PX_LAST')
                     ticker = security_data.getElementAsString('security')
-                    print(f'Last price for {ticker}: {last_price}')
+                    #print(f'Last price for {ticker}: {last_price}')
                     market_cap = fetch_field_data(field_data, 'CUR_MKT_CAP')
                     book_value_per_share = fetch_field_data(field_data, 'BOOK_VAL_PER_SH')
                     roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
