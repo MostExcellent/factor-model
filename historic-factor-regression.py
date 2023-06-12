@@ -149,13 +149,6 @@ def process_factors(df):
 
     return df_copy
 
-data = []
-for year, year_data in data_dict.items():
-    for data_item in year_data:
-        data_item.insert(0, year)
-        data.append(data_item)
-
-df = pd.DataFrame(data, columns=['Year', 'Ticker', 'LastPrice', 'MarketCap', 'BookValuePerShare', 'ROE', 'FreeCashFlow'])
 df['RiskFreeRate'] = df['Year'].map(get_risk_free_rate())
 
 # Calculate forward returns
