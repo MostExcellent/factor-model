@@ -43,14 +43,14 @@ def fetch_field_data(field_data, field):
         return np.nan
 
 # Get the data
-data_rows = []
-for ticker in tickers:
-    for year in years:
+def get_data(tickers, fields, years):
+    data_rows = []
+    for ticker in tickers:
         request = ref_data_service.createRequest("ReferenceDataRequest")
         request.set("periodicityAdjustment", "ACTUAL")
         request.set("periodicitySelection", "ANNUAL")
-        request.set("startDate", f"{year}-01-01")
-        request.set("endDate", f"{year}-12-31")
+        request.set("startDate", f"{years[0]}-01-01")
+        request.set("endDate", f"{years[-1]}-12-31")
         request.set("nonTradingDayFillOption", "ALL_CALENDAR_DAYS")
         request.set("nonTradingDayFillMethod", "PREVIOUS_VALUE")
         request.append("securities", ticker)
@@ -66,7 +66,6 @@ for ticker in tickers:
             security_data_array = msg.getElement('securityData')
         
         for i in range(security_data_array.numValues()):
-            # Stick the data into data_dict to be converted to a dataframe later
             security_data = security_data_array.getValueAsElement(i)
             field_exceptions = security_data.getElement('fieldExceptions')
                 
@@ -75,23 +74,26 @@ for ticker in tickers:
                 continue
 
             field_data = security_data.getElement('fieldData')
-            last_price = fetch_field_data(field_data, 'PX_LAST')
-            market_cap = fetch_field_data(field_data, 'CUR_MKT_CAP')
-            book_value_per_share = fetch_field_data(field_data, 'BOOK_VAL_PER_SH')
-            roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
-            free_cash_flow = fetch_field_data(field_data, 'CF_FREE_CASH_FLOW')
+            
+            for y in years:
+                last_price = fetch_field_data(field_data, 'PX_LAST')
+                market_cap = fetch_field_data(field_data, 'CUR_MKT_CAP')
+                book_value_per_share = fetch_field_data(field_data, 'BOOK_VAL_PER_SH')
+                roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
+                free_cash_flow = fetch_field_data(field_data, 'CF_FREE_CASH_FLOW')
 
-            data_rows.append({
-                'Year': year,
-                'Ticker': ticker,
-                'LastPrice': last_price,
-                'MarketCap': market_cap,
-                'BookValuePerShare': book_value_per_share,
-                'ROE': roe,
-                'FreeCashFlow': free_cash_flow,
-            })
+                data_rows.append({
+                    'Year': y,
+                    'Ticker': ticker,
+                    'LastPrice': last_price,
+                    'MarketCap': market_cap,
+                    'BookValuePerShare': book_value_per_share,
+                    'ROE': roe,
+                    'FreeCashFlow': free_cash_flow,
+                })
 
-df = pd.DataFrame(data_rows)
+    return pd.DataFrame(data_rows)
+
 
 # Returns average risk free rate for each year in years as a dictionary
 def get_risk_free_rate(years = years):
@@ -148,6 +150,8 @@ def process_factors(df):
     df_copy['Score'] = df_copy[['MarketPremiumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)
 
     return df_copy
+
+df = get_data(tickers, fields, years)
 
 df['RiskFreeRate'] = df['Year'].map(get_risk_free_rate())
 
