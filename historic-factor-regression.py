@@ -11,7 +11,7 @@ import seaborn as sns
 # The Bloomberg API
 import blpapi
 
-START_YEAR = 2000
+START_YEAR = 2010
 END_YEAR = 2021
 
 # Start a Bloomberg session
