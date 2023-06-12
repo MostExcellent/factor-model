@@ -8,7 +8,10 @@ from sklearn.metrics import mean_squared_error, r2_score
 # The Bloomberg API
 import blpapi
 
-session = blpapi.Session()  # Start a Bloomberg session
+START_YEAR = 2000
+END_YEAR = 2021
+
+session = blpapi.Session(options=blpapi.SessionOptions(host='localhost', port=8194))  # Start a Bloomberg session
 session.start()
 
 # Open the reference data service
@@ -22,9 +25,25 @@ ref_data_service = session.getService("//blp/refdata")
 tickers = ['AAPL US Equity', 'GOOGL US Equity', 'MSFT US Equity', 'AMZN US Equity', 'META US Equity']  # Bloomberg format for tickers
 fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH', 'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']  # Bloomberg fields
 
-years = range(2000, 2021)  # Sample period
-data_dict = {year: [] for year in years}
+years = range(START_YEAR, END_YEAR)  # Sample period
 
+def event_loop(session):
+    # Event Loop
+    while True:
+        event = session.nextEvent()
+        if event.eventType() == blpapi.Event.RESPONSE or \
+        event.eventType() == blpapi.Event.PARTIAL_RESPONSE:
+            break
+    return event
+
+def fetch_field_data(field_data, field):
+    try:
+        return field_data.getElementAsFloat(field)
+    except blpapi.NotFoundException:
+        return np.nan
+
+# Get the data
+data_rows = []
 for ticker in tickers:
     for year in years:
         request = ref_data_service.createRequest("ReferenceDataRequest")
@@ -39,13 +58,8 @@ for ticker in tickers:
             request.append("fields", field)
     
         session.sendRequest(request)
-    
-        # Event Loop
-        while True:
-            event = session.nextEvent()
-            if event.eventType() == blpapi.Event.RESPONSE or \
-            event.eventType() == blpapi.Event.PARTIAL_RESPONSE:
-                break
+
+        event = event_loop(session)
 
         # Get the response
         for msg in event:
@@ -61,16 +75,54 @@ for ticker in tickers:
                 continue
 
             field_data = security_data.getElement('fieldData')
-            last_price = field_data.getElementAsFloat('PX_LAST')
-            market_cap = field_data.getElementAsFloat('CUR_MKT_CAP')
-            book_value_per_share = field_data.getElementAsFloat('BOOK_VAL_PER_SH')
-            roe = field_data.getElementAsFloat('RETURN_COM_EQY')
-            free_cash_flow = field_data.getElementAsFloat('CF_FREE_CASH_FLOW')
+            last_price = fetch_field_data(field_data, 'PX_LAST')
+            market_cap = fetch_field_data(field_data, 'CUR_MKT_CAP')
+            book_value_per_share = fetch_field_data(field_data, 'BOOK_VAL_PER_SH')
+            roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
+            free_cash_flow = fetch_field_data(field_data, 'CF_FREE_CASH_FLOW')
 
-            data_dict[year].append([ticker, last_price, market_cap, book_value_per_share, roe, free_cash_flow])
+            data_rows.append({
+                'Year': year,
+                'Ticker': ticker,
+                'LastPrice': last_price,
+                'MarketCap': market_cap,
+                'BookValuePerShare': book_value_per_share,
+                'ROE': roe,
+                'FreeCashFlow': free_cash_flow,
+            })
 
-df = pd.DataFrame()
-df['Year'] = years
+df = pd.DataFrame(data_rows)
+
+# Returns average risk free rate for each year in years as a dictionary
+def get_risk_free_rate(years = years):
+
+    risk_free_rates = {}
+
+    request = ref_data_service.createRequest("ReferenceDataRequest")
+    request.set("securities", "USGG10YR Index")
+    request.set("fields", "PX_LAST")
+    request.set("periodicityAdjustment", "MONTHLY")
+    request.set("periodicitySelection", "MONTHLY")
+    request.set("startDate", f"{years[0]}-01-01")
+    request.set("endDate", f"{years[-1]}-12-31")
+
+    event = event_loop(session)
+    
+    for msg in event:
+        security_data = msg.getElement('securityData')
+        field_data = security_data.getElement('fieldData')
+
+        rate_data = []
+        for i in range(field_data.numValues()):
+            data = field_data.getValueAsElement(i)
+            date = data.getElementAsDatetime("date")
+            rate = data.getElementAsFloat("PX_LAST")
+            rate_data.append([date.year(), rate])
+
+        df_rates = pd.DataFrame(rate_data, columns=['Year', 'Rate'])
+        risk_free_rates = df_rates.groupby('Year').mean().to_dict()['Rate']
+    
+    return risk_free_rates
 
 # Noralization helper function
 def normalize(x):
@@ -78,23 +130,33 @@ def normalize(x):
 
 def process_factors(df):
     # Calculate factors
-    df['MarketPremium'] = df['LastPrice'].pct_change()
-    df['Size'] = df['MarketCap']
-    df['Value'] = df['BookValuePerShare'] / df['LastPrice']  # Book to market ratio
-    df['Profitability'] = df['ROE']
-    df['Investment'] = df['FreeCashFlow'] / df['MarketCap']
+    df_copy = df.copy()
+    df_copy['MarketPremium'] = df_copy.groupby('Ticker')['LastPrice'].pct_change() - df_copy['RiskFreeRate']
+    df_copy['Size'] = df_copy['MarketCap']
+    df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']  # Book to market ratio
+    df_copy['Profitability'] = df_copy['ROE']
+    df_copy['Investment'] = df_copy['FreeCashFlow'] / df_copy['MarketCap']
 
     # Normalize factors to have a common scale
-    df['MarketPremiumNorm'] = normalize(df['MarketPremium'])
-    df['SizeNorm'] = normalize(df['Size'])
-    df['ValueNorm'] = normalize(df['Value'])
-    df['ProfitabilityNorm'] = normalize(df['Profitability'])
-    df['InvestmentNorm'] = normalize(df['Investment'])
+    df_copy['MarketPremiumNorm'] = normalize(df_copy['MarketPremium'])
+    df_copy['SizeNorm'] = normalize(df_copy['Size'])
+    df_copy['ValueNorm'] = normalize(df_copy['Value'])
+    df_copy['ProfitabilityNorm'] = normalize(df_copy['Profitability'])
+    df_copy['InvestmentNorm'] = normalize(df_copy['Investment'])
 
     # Calculate score as a sum of all normalized factors (equal weight to all factors)
-    df['Score'] = df[['MarketPremiumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)
+    df_copy['Score'] = df_copy[['MarketPremiumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)
 
-    return df
+    return df_copy
+
+data = []
+for year, year_data in data_dict.items():
+    for data_item in year_data:
+        data_item.insert(0, year)
+        data.append(data_item)
+
+df = pd.DataFrame(data, columns=['Year', 'Ticker', 'LastPrice', 'MarketCap', 'BookValuePerShare', 'ROE', 'FreeCashFlow'])
+df['RiskFreeRate'] = df['Year'].map(get_risk_free_rate())
 
 # Calculate forward returns
 df['ForwardReturn'] = df.groupby('Ticker')['LastPrice'].pct_change(-1)
@@ -103,11 +165,11 @@ df.dropna(subset=['ForwardReturn'], inplace=True)
 # Normalize forward returns
 df['ForwardReturnNorm'] = df.groupby('Year')['ForwardReturn'].transform(normalize)
 
-# Group by ticker and year
+# Group by ticker and year and calculate factors
 df_grouped = df.groupby(['Ticker', 'Year']).apply(process_factors)
 df_grouped.reset_index(inplace=True, drop=True)
 
-# Save to csv to avoid making API calls again
+# Save to csv to avoid making API calls again in the future
 df_grouped.to_csv('data.csv')
 # TODO: add argument to read from csv if it exists
 # TODO: stick this into a notebook
@@ -134,5 +196,6 @@ y_pred = rf.predict(x_test)
 mse = mean_squared_error(y_test, y_pred)
 r2 = r2_score(y_test, y_pred)
 
+print(f'Feature importance: {rf.feature_importances_}')
 print(f'MSE: {mse}')
 print(f'R-squared: {r2}')
