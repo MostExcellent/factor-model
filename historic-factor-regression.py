@@ -90,6 +90,7 @@ def get_data(fields, years, index=INDEX):
     """
     Gets data from Bloomberg for the given tickers, fields and years.
     """
+    print("Getting data from Bloomberg...")
     data_rows = []
     for year in years:
         for ticker in get_index_members(index, year):
@@ -163,6 +164,7 @@ def get_risk_free_rate(years = years):
     """
     Returns average risk free rate for each year in years as a dictionary
     """
+    print("Getting risk free rates...")
     risk_free_rates = {}
 
     request = ref_data_service.createRequest("HistoricalDataRequest")
@@ -208,6 +210,7 @@ def process_factors(df):
     """
     Calculate factors and their normalized versions.
     """
+    print("Processing factors...")
     df_copy = df.copy()
     df_copy['MarketPremium'] = df_copy.groupby('Ticker')['LastPrice'].pct_change() - df_copy['RiskFreeRate']
      # Size premium is incorrect, and is a plaholder
@@ -228,13 +231,28 @@ def process_factors(df):
 
     return df_copy
 
+def train_model(x_train, y_train):
+    print("Training model...")
+    rf = RandomForestRegressor(n_estimators=100, random_state=42)
+    rf.fit(x_train, y_train)
+    return rf
+
+def test_model(rf, x_test, y_test):
+    print("Testing model...")
+    y_pred = rf.predict(x_test)
+    mse = mean_squared_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+    return y_pred, mse, r2
+
 # Load data from csv if it exists, else fetch from Bloomberg API
 csv_file = 'data.csv'
 # Check if the file exists
 if os.path.isfile(csv_file):
     # Read from the file
+    print("Reading data from csv...")
     df = pd.read_csv(csv_file)
 else:
+    print("Fetching data from Bloomberg API...")
     # Fetch data from the Bloomberg API
     df = get_data(fields, years)
     # Save to csv to avoid making API calls again in the future
@@ -249,6 +267,7 @@ df = cap_and_floor(df, 'ROE', 0.01, 0.99)
 df = cap_and_floor(df, 'FreeCashFlow', 0.01, 0.99)
 
 # Validate data types
+print("Validating data types...")
 assert df['Year'].dtype == np.int64, "Year should be an integer"
 assert df['Ticker'].dtype == str, "Ticker should be a string"
 assert df['LastPrice'].dtype == np.float64, "LastPrice should be a float"
@@ -263,7 +282,18 @@ assert df.duplicated().sum() == 0, "Data contains duplicated rows"
 if df.isnull().any().any():
     print("Warning: The data contains missing values")
 
-df['RiskFreeRate'] = df['Year'].map(get_risk_free_rate())
+# If risk free rates csv exists, read from it, else fetch from Bloomberg API
+csv_risk_free_rates = 'risk_free_rates.csv'
+
+try:
+    print("Reading risk free rates from csv...")
+    df_rates = pd.read_csv(csv_risk_free_rates)
+    risk_free_rates = df_rates.groupby('Year')['Rate'].mean().to_dict()
+except FileNotFoundError:
+    print("File not found, fetching risk free rates from Bloomberg API")
+    risk_free_rates = get_risk_free_rate()
+
+df['RiskFreeRate'] = df['Year'].map(risk_free_rates)
 
 # Calculate forward returns
 df['ForwardReturn'] = df.groupby('Ticker')['LastPrice'].pct_change(-1)
@@ -293,14 +323,10 @@ y = df_grouped[target]
 x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
 
 # Initialize and fit model
-rf = RandomForestRegressor(n_estimators=100, random_state=42)
-rf.fit(x_train, y_train)
+rf = train_model(x_train, y_train)
 
-y_pred = rf.predict(x_test)
-
-# Calculate metrics
-mse = mean_squared_error(y_test, y_pred)
-r2 = r2_score(y_test, y_pred)
+# Test model
+y_pred, mse, r2 = test_model(rf, x_test, y_test)
 
 print(f'Feature importance: {rf.feature_importances_}')
 print(f'MSE: {mse}')
@@ -341,3 +367,41 @@ plt.xlabel('Actual Returns')
 plt.ylabel('Predicted Returns')
 plt.title('Predicted vs. Actual Returns')
 plt.savefig('predicted_vs_actual.png')
+
+# Bootstrap analysis
+n_samples = 1000
+
+residuals = []
+mse_vals = []
+r2_vals = []
+
+for _ in range(n_samples):
+    # Bootstrap sample (with replacement)
+    sample_df = df_grouped.sample(frac=1, replace=True, random_state=42)
+    x_sample = sample_df[features]
+    y_sample = sample_df[target]
+
+    # Split data into train and test sets
+    x_train_sample, x_test_sample, y_train_sample, y_test_sample = train_test_split(x_sample, y_sample, test_size=0.2, random_state=42)
+
+    # Train and test model on the bootstrap sample
+    rf = train_model(x_train_sample, y_train_sample)
+    y_pred, mse, r2 = test_model(rf, x_test_sample, y_test_sample)
+
+    # Record the results
+    residuals.append(y_test_sample - y_pred)
+    mse_vals.append(mse)
+    r2_vals.append(r2)
+
+# Now we can calculate the confidence intervals for MSE and R^2
+confidence_level = 0.95
+residuals_lower = np.percentile(residuals, ((1 - confidence_level) / 2) * 100)
+residuals_upper = np.percentile(residuals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+mse_lower = np.percentile(mse_vals, ((1 - confidence_level) / 2) * 100)
+mse_upper = np.percentile(mse_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+r2_lower = np.percentile(r2_vals, ((1 - confidence_level) / 2) * 100)
+r2_upper = np.percentile(r2_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+
+print(f"{confidence_level*100}% confidence interval for residuals: ({residuals_lower}, {residuals_upper})")
+print(f"{confidence_level*100}% confidence interval for MSE: ({mse_lower}, {mse_upper})")
+print(f"{confidence_level*100}% confidence interval for R^2: ({r2_lower}, {r2_upper})")
