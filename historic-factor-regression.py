@@ -15,7 +15,7 @@ START_YEAR = 2000
 END_YEAR = 2021
 
 # Start a Bloomberg session
-session = blpapi.Session(options=blpapi.SessionOptions(host='localhost', port=8194))  # Start a Bloomberg session
+session = blpapi.Session()  # Start a Bloomberg session
 session.start()
 
 # Open the reference data service
@@ -29,7 +29,7 @@ ref_data_service = session.getService("//blp/refdata")
 tickers = ['AAPL US Equity', 'GOOGL US Equity', 'MSFT US Equity', 'AMZN US Equity', 'META US Equity']  # Bloomberg format for tickers
 fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH', 'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']  # Bloomberg fields
 
-years = range(START_YEAR, END_YEAR)  # Sample period
+years = np.arange(START_YEAR, END_YEAR)  # Sample period
 
 def event_loop(session):
     """
@@ -54,9 +54,9 @@ def get_data(tickers, fields, years):
     """
     data_rows = []
     for ticker in tickers:
-        request = ref_data_service.createRequest("ReferenceDataRequest")
+        request = ref_data_service.createRequest("HistoricalDataRequest")
         request.set("periodicityAdjustment", "ACTUAL")
-        request.set("periodicitySelection", "ANNUAL")
+        request.set("periodicitySelection", "YEARLY")
         request.set("startDate", f"{years[0]}-01-01")
         request.set("endDate", f"{years[-1]}-12-31")
         request.set("nonTradingDayFillOption", "ALL_CALENDAR_DAYS")
@@ -108,7 +108,7 @@ def get_risk_free_rate(years = years):
     """
     risk_free_rates = {}
 
-    request = ref_data_service.createRequest("ReferenceDataRequest")
+    request = ref_data_service.createRequest("HistoricalDataRequest")
     request.set("securities", "USGG10YR Index")
     request.set("fields", "PX_LAST")
     request.set("periodicityAdjustment", "MONTHLY")
@@ -216,7 +216,7 @@ df_grouped.to_csv('data.csv')
 
 # Now we do a regression
 
-features = ['MarketPremiumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm', 'Score']
+features = ['MarketPremiumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm'] #,'Score']
 target = 'ForwardReturnNorm'
 
 x = df_grouped[features]
