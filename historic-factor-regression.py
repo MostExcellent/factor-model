@@ -96,72 +96,78 @@ def get_data(fields, years, index=INDEX):
     print("Getting data from Bloomberg...")
     data_rows = []
     for year in years:
-        for ticker in get_index_members(index, year):
-            #print(f'Processing {ticker}')
-            try:
-                request = ref_data_service.createRequest("HistoricalDataRequest")
-                request.set("periodicityAdjustment", "ACTUAL")
-                request.set("periodicitySelection", "YEARLY")
-                request.set("startDate", f"{year}-01-01")
-                request.set("endDate", f"{year}-12-31") # changed end date to end of the year
-                request.set("nonTradingDayFillOption", "ALL_CALENDAR_DAYS")
-                request.set("nonTradingDayFillMethod", "PREVIOUS_VALUE")
+        # get the tickers
+        tickers = get_index_members(index, year)
+        print(f'Processing {len(tickers)} tickers for the year {year}')
+        try:
+            request = ref_data_service.createRequest("HistoricalDataRequest")
+            request.set("periodicityAdjustment", "ACTUAL")
+            request.set("periodicitySelection", "YEARLY")
+            request.set("startDate", f"{year}-01-01")
+            request.set("endDate", f"{year}-12-31") # changed end date to end of the year
+            request.set("nonTradingDayFillOption", "ALL_CALENDAR_DAYS")
+            request.set("nonTradingDayFillMethod", "PREVIOUS_VALUE")
+
+            # append all tickers to the request
+            for ticker in tickers:
                 request.append("securities", ticker)
-                for field in fields:
-                    request.append("fields", field)
+                
+            for field in fields:
+                request.append("fields", field)
+
+            session.sendRequest(request)
+
+            event = event_loop(session)
+
+            # Get the response
+            for msg in event:
+                #print(msg)
+                if msg.hasElement('securityData'): # check if 'securityData' is present
+                    security_data_array = msg.getElement('securityData')
+                else:
+                    continue
             
-                session.sendRequest(request)
+                for i in range(security_data_array.numValues()):
+                    security_data = security_data_array.getValueAsElement(i)
+                    field_exceptions = security_data.getElement('fieldExceptions')
 
-                event = event_loop(session)
-
-                # Get the response
-                for msg in event:
-                    #print(msg)
-                    if msg.hasElement('securityData'): # check if 'securityData' is present
-                        security_data_array = msg.getElement('securityData')
-                    else:
+                    # If there are any field exceptions, skip this ticker for this year
+                    if field_exceptions.numValues() > 0:
                         continue
+
+                    field_data = security_data.getElement('fieldData')
+
+                    last_price = fetch_field_data(field_data, 'PX_LAST')
+                    ticker = security_data.getElementAsString('security')
+                    print(f'Last price for {ticker}: {last_price}')
+                    market_cap = fetch_field_data(field_data, 'CUR_MKT_CAP')
+                    book_value_per_share = fetch_field_data(field_data, 'BOOK_VAL_PER_SH')
+                    roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
+                    free_cash_flow = fetch_field_data(field_data, 'CF_FREE_CASH_FLOW')
+
+                    data_rows.append({
+                        'Year': year,
+                        'Ticker': ticker,
+                        'LastPrice': last_price,
+                        'MarketCap': market_cap,
+                        'BookValuePerShare': book_value_per_share,
+                        'ROE': roe,
+                        'FreeCashFlow': free_cash_flow,
+                    })
+
+        except Exception as e:
+            print(f"Error for {ticker} in {year}: {e}")
+            # Append a placeholder row with NaNs in case there are issues. (for delisted stocks?)
+            data_rows.append({
+                'Year': year,
+                'Ticker': ticker,
+                'LastPrice': np.nan,
+                'MarketCap': np.nan,
+                'BookValuePerShare': np.nan,
+                'ROE': np.nan,
+                'FreeCashFlow': np.nan,
+            })
             
-                    for i in range(security_data_array.numValues()):
-                        security_data = security_data_array.getValueAsElement(i)
-                        field_exceptions = security_data.getElement('fieldExceptions')
-                    
-                        # If there are any field exceptions, skip this ticker for this year
-                        if field_exceptions.numValues() > 0:
-                            continue
-
-                        field_data = security_data.getElement('fieldData')
-                
-                        last_price = fetch_field_data(field_data, 'PX_LAST')
-                        print(f'Last price for {ticker}: {last_price}')
-                        market_cap = fetch_field_data(field_data, 'CUR_MKT_CAP')
-                        book_value_per_share = fetch_field_data(field_data, 'BOOK_VAL_PER_SH')
-                        roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
-                        free_cash_flow = fetch_field_data(field_data, 'CF_FREE_CASH_FLOW')
-
-                        data_rows.append({
-                            'Year': year,
-                            'Ticker': ticker,
-                            'LastPrice': last_price,
-                            'MarketCap': market_cap,
-                            'BookValuePerShare': book_value_per_share,
-                            'ROE': roe,
-                            'FreeCashFlow': free_cash_flow,
-                        })
-
-            except Exception as e:
-                print(f"Error for {ticker} in {year}: {e}")
-                # Append a placeholder row with NaNs in case there are issues. (for delisted stocks?)
-                data_rows.append({
-                    'Year': year,
-                    'Ticker': ticker,
-                    'LastPrice': np.nan,
-                    'MarketCap': np.nan,
-                    'BookValuePerShare': np.nan,
-                    'ROE': np.nan,
-                    'FreeCashFlow': np.nan,
-                })
-                
     df = pd.DataFrame(data_rows)
     print(df)
 
@@ -171,6 +177,7 @@ def get_data(fields, years, index=INDEX):
     df.dropna(inplace=True)
 
     return df
+
 
 
 def get_risk_free_rate(years = years):
