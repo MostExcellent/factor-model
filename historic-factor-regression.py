@@ -14,6 +14,8 @@ import seaborn as sns
 import blpapi
 # To load the data from csv
 import os
+# For timeout
+import time
 
 START_YEAR = 2010
 END_YEAR = 2021
@@ -37,19 +39,19 @@ fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH', 'RETURN_COM_EQY', 'CF_FRE
 
 years = np.arange(START_YEAR, END_YEAR)  # Sample period
 
-def event_loop(session):
+def event_loop(session, timeout=5000):
     """
-    An event loop to wait for the response from the Bloomberg API.
+    Creates an event loop that waits for a response from the session.
     """
+    event = None
+    deadline = time.time() + timeout / 1000  # convert ms to seconds
     while True:
-        event = session.nextEvent(500)
-        print(f"event type: {event.eventType()}")
-        if event.eventType() == blpapi.Event.RESPONSE or \
-        event.eventType() == blpapi.Event.PARTIAL_RESPONSE or \
-            event.eventType() == blpapi.Event.TIMEOUT:
+        event = session.nextEvent(timeout)
+        if event.eventType() in [blpapi.Event.PARTIAL_RESPONSE, blpapi.Event.RESPONSE]:
+            break
+        if time.time() > deadline:
             break
     return event
-
 
 # TODO: separate the code for making a request.
 
