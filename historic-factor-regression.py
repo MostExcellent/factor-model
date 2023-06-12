@@ -1,3 +1,5 @@
+# TODO: try monthly data and test different time periods
+
 # The basics
 import pandas as pd
 import numpy as np
@@ -13,6 +15,7 @@ import blpapi
 
 START_YEAR = 2010
 END_YEAR = 2021
+INDEX = 'SPX Index'  # S&P 500
 
 # Start a Bloomberg session
 session = blpapi.Session()  # Start a Bloomberg session
@@ -26,7 +29,8 @@ if not session.openService("//blp/refdata"):
 
 ref_data_service = session.getService("//blp/refdata")
 
-tickers = ['AAPL US Equity', 'GOOGL US Equity', 'MSFT US Equity', 'AMZN US Equity', 'META US Equity']  # Bloomberg format for tickers
+# No longer needed as we are getting the list of tickers dynamically from the index members each year
+# tickers = ['AAPL US Equity', 'GOOGL US Equity', 'MSFT US Equity', 'AMZN US Equity', 'META US Equity']  # Bloomberg format for tickers
 fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH', 'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']  # Bloomberg fields
 
 years = np.arange(START_YEAR, END_YEAR)  # Sample period
@@ -42,65 +46,116 @@ def event_loop(session):
             break
     return event
 
+# TODO: separate the code for making a request.
+
 def fetch_field_data(field_data, field):
     try:
         return field_data.getElementAsFloat(field)
     except blpapi.NotFoundException:
         return np.nan
 
-def get_data(tickers, fields, years):
+def get_index_members(index, year):
+    """
+    Gets the index members for the given index and year.
+    """
+    request = ref_data_service.createRequest("HistoricalDataRequest")
+    request.append("securities", index)
+    request.append("fields", "INDX_MEMBERS")
+    request.set("periodicityAdjustment", "ACTUAL")
+    request.set("periodicitySelection", "YEARLY")
+    request.set("startDate", f"{year}-01-01")
+    request.set("endDate", f"{year}-01-01")
+    request.set("nonTradingDayFillOption", "ALL_CALENDAR_DAYS")
+    request.set("nonTradingDayFillMethod", "NEXT_VALUE")
+
+    session.sendRequest(request)
+    event = event_loop(session)
+
+    members = []
+    for msg in event:
+        security_data_array = msg.getElement('securityData')
+        for i in range(security_data_array.numValues()):
+            security_data = security_data_array.getValueAsElement(i)
+            field_data = security_data.getElement('fieldData')
+            members = field_data.getElementAsString('INDX_MEMBERS').split(',')
+    
+    return members
+
+
+
+
+def get_data(fields, years, index=INDEX):
     """
     Gets data from Bloomberg for the given tickers, fields and years.
     """
     data_rows = []
-    for ticker in tickers:
-        request = ref_data_service.createRequest("HistoricalDataRequest")
-        request.set("periodicityAdjustment", "ACTUAL")
-        request.set("periodicitySelection", "YEARLY")
-        request.set("startDate", f"{years[0]}-01-01")
-        request.set("endDate", f"{years[-1]}-12-31")
-        request.set("nonTradingDayFillOption", "ALL_CALENDAR_DAYS")
-        request.set("nonTradingDayFillMethod", "PREVIOUS_VALUE")
-        request.append("securities", ticker)
-        for field in fields:
-            request.append("fields", field)
-    
-        session.sendRequest(request)
-
-        event = event_loop(session)
-
-        # Get the response
-        for msg in event:
-            security_data_array = msg.getElement('securityData')
-        
-        for i in range(security_data_array.numValues()):
-            security_data = security_data_array.getValueAsElement(i)
-            field_exceptions = security_data.getElement('fieldExceptions')
-                
-            # If there are any field exceptions, skip this ticker for this year
-            if field_exceptions.numValues() > 0:
-                continue
-
-            field_data = security_data.getElement('fieldData')
+    for year in years:
+        for ticker in get_index_members(index, year):
+            try:
+                request = ref_data_service.createRequest("HistoricalDataRequest")
+                request.set("periodicityAdjustment", "ACTUAL")
+                request.set("periodicitySelection", "YEARLY")
+                request.set("startDate", f"{year}-01-01")
+                request.set("endDate", f"{year}-01-01")
+                request.set("nonTradingDayFillOption", "ALL_CALENDAR_DAYS")
+                request.set("nonTradingDayFillMethod", "NEXT_VALUE")
+                request.append("securities", ticker)
+                for field in fields:
+                    request.append("fields", field)
             
-            for y in years:
-                last_price = fetch_field_data(field_data, 'PX_LAST')
-                market_cap = fetch_field_data(field_data, 'CUR_MKT_CAP')
-                book_value_per_share = fetch_field_data(field_data, 'BOOK_VAL_PER_SH')
-                roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
-                free_cash_flow = fetch_field_data(field_data, 'CF_FREE_CASH_FLOW')
+                session.sendRequest(request)
 
+                event = event_loop(session)
+
+                # Get the response
+                for msg in event:
+                    security_data_array = msg.getElement('securityData')
+            
+                for i in range(security_data_array.numValues()):
+                    security_data = security_data_array.getValueAsElement(i)
+                    field_exceptions = security_data.getElement('fieldExceptions')
+                    
+                    # If there are any field exceptions, skip this ticker for this year
+                    if field_exceptions.numValues() > 0:
+                        continue
+
+                    field_data = security_data.getElement('fieldData')
+                
+                    last_price = fetch_field_data(field_data, 'PX_LAST')
+                    market_cap = fetch_field_data(field_data, 'CUR_MKT_CAP')
+                    book_value_per_share = fetch_field_data(field_data, 'BOOK_VAL_PER_SH')
+                    roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
+                    free_cash_flow = fetch_field_data(field_data, 'CF_FREE_CASH_FLOW')
+
+                    data_rows.append({
+                        'Year': year,
+                        'Ticker': ticker,
+                        'LastPrice': last_price,
+                        'MarketCap': market_cap,
+                        'BookValuePerShare': book_value_per_share,
+                        'ROE': roe,
+                        'FreeCashFlow': free_cash_flow,
+                    })
+
+            except Exception as e:
+                # Append a placeholder row with NaNs in case there are issues. (for delisted stocks?)
                 data_rows.append({
-                    'Year': y,
+                    'Year': year,
                     'Ticker': ticker,
-                    'LastPrice': last_price,
-                    'MarketCap': market_cap,
-                    'BookValuePerShare': book_value_per_share,
-                    'ROE': roe,
-                    'FreeCashFlow': free_cash_flow,
+                    'LastPrice': np.nan,
+                    'MarketCap': np.nan,
+                    'BookValuePerShare': np.nan,
+                    'ROE': np.nan,
+                    'FreeCashFlow': np.nan,
                 })
 
-    return pd.DataFrame(data_rows)
+    df = pd.DataFrame(data_rows)
+
+    # Handle missing values by interpolation, then drop remaining NaNs
+    df = df.groupby('Ticker').apply(lambda group: group.interpolate(method='linear'))
+    df.dropna(inplace=True)
+
+    return df
 
 def get_risk_free_rate(years = years):
     """
@@ -114,7 +169,9 @@ def get_risk_free_rate(years = years):
     request.set("periodicityAdjustment", "MONTHLY")
     request.set("periodicitySelection", "MONTHLY")
     request.set("startDate", f"{years[0]}-01-01")
-    request.set("endDate", f"{years[-1]}-12-31")
+    request.set("endDate", f"{years[-1]}-12-31") # Remember, we want the average for the year
+    request.set("nonTradingDayFillOption", "ALL_CALENDAR_DAYS")
+    request.set("nonTradingDayFillMethod", "NEXT_VALUE")
 
     event = event_loop(session)
     
@@ -151,7 +208,8 @@ def process_factors(df):
     """
     df_copy = df.copy()
     df_copy['MarketPremium'] = df_copy.groupby('Ticker')['LastPrice'].pct_change() - df_copy['RiskFreeRate']
-    df_copy['Size'] = df_copy['MarketCap'] # This is incorrect, and is a plaholder until I implement CAPM
+     # Size premium is incorrect, and is a plaholder
+    df_copy['Size'] = df_copy['MarketCap'] # This is still useful for the regressor, however
     df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']  
     df_copy['Profitability'] = df_copy['ROE']
     df_copy['Investment'] = df_copy['FreeCashFlow'] / df_copy['MarketCap']
@@ -169,7 +227,7 @@ def process_factors(df):
     return df_copy
 
 # Get data
-df = get_data(tickers, fields, years)
+df = get_data(fields, years)
 
 # Cap and floor outliers
 df = cap_and_floor(df, 'LastPrice', 0.01, 0.99)
@@ -186,9 +244,6 @@ assert df['MarketCap'].dtype == np.float64, "MarketCap should be a float"
 assert df['BookValuePerShare'].dtype == np.float64, "BookValuePerShare should be a float"
 assert df['ROE'].dtype == np.float64, "ROE should be a float"
 assert df['FreeCashFlow'].dtype == np.float64, "FreeCashFlow should be a float"
-
-# Validate tickers
-assert set(df['Ticker']).issubset(set(tickers)), "Unexpected ticker symbols in the data"
 
 # Check for duplicates
 assert df.duplicated().sum() == 0, "Data contains duplicated rows"
