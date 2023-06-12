@@ -5,6 +5,9 @@ import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
+# For plotting
+import matplotlib.pyplot as plt
+import seaborn as sns
 # The Bloomberg API
 import blpapi
 
@@ -130,6 +133,13 @@ def get_risk_free_rate(years = years):
 def normalize(x):
     return (x - x.mean()) / x.std()
 
+# Cap and floor outliers
+def cap_and_floor(df, column, lower_percentile, upper_percentile):
+    lower, upper = df[column].quantile([lower_percentile, upper_percentile])
+    df[column] = np.where(df[column] < lower, lower, df[column])
+    df[column] = np.where(df[column] > upper, upper, df[column])
+    return df
+
 def process_factors(df):
     # Calculate factors
     df_copy = df.copy()
@@ -152,6 +162,31 @@ def process_factors(df):
     return df_copy
 
 df = get_data(tickers, fields, years)
+
+# Cap and floor outliers
+df = cap_and_floor(df, 'LastPrice', 0.01, 0.99)
+df = cap_and_floor(df, 'MarketCap', 0.01, 0.99)
+df = cap_and_floor(df, 'BookValuePerShare', 0.01, 0.99)
+df = cap_and_floor(df, 'ROE', 0.01, 0.99)
+df = cap_and_floor(df, 'FreeCashFlow', 0.01, 0.99)
+
+# Validate data types
+assert df['Year'].dtype == np.int64, "Year should be an integer"
+assert df['Ticker'].dtype == str, "Ticker should be a string"
+assert df['LastPrice'].dtype == np.float64, "LastPrice should be a float"
+assert df['MarketCap'].dtype == np.float64, "MarketCap should be a float"
+assert df['BookValuePerShare'].dtype == np.float64, "BookValuePerShare should be a float"
+assert df['ROE'].dtype == np.float64, "ROE should be a float"
+assert df['FreeCashFlow'].dtype == np.float64, "FreeCashFlow should be a float"
+
+# Validate tickers
+assert set(df['Ticker']).issubset(set(tickers)), "Unexpected ticker symbols in the data"
+
+# Check for duplicates
+assert df.duplicated().sum() == 0, "Data contains duplicated rows"
+
+if df.isnull().any().any():
+    print("Warning: The data contains missing values")
 
 df['RiskFreeRate'] = df['Year'].map(get_risk_free_rate())
 
@@ -196,3 +231,37 @@ r2 = r2_score(y_test, y_pred)
 print(f'Feature importance: {rf.feature_importances_}')
 print(f'MSE: {mse}')
 print(f'R-squared: {r2}')
+
+# Feature importance plot
+plt.figure(figsize=(10, 6))
+sns.barplot(x=rf.feature_importances_, y=features)
+plt.title('Feature Importance')
+plt.savefig('feature_importance.png')
+
+# Residuals plot
+residuals = y_test - y_pred
+plt.figure(figsize=(10, 6))
+sns.histplot(residuals, bins='auto', kde=True)
+plt.title('Residuals Distribution')
+plt.savefig('residuals.png')
+
+# Distribution of each factor
+for factor in features:
+    plt.figure(figsize=(10, 6))
+    sns.histplot(df_grouped[factor], bins='auto', kde=True)
+    plt.title(f'Distribution of {factor}')
+    plt.savefig(f'{factor}_distribution.png')
+
+# Correlation matrix heatmap
+plt.figure(figsize=(10, 6))
+sns.heatmap(df_grouped[features].corr(), annot=True, cmap='coolwarm')
+plt.title('Correlation Matrix')
+plt.savefig('correlation_matrix.png')
+
+# Scatter plot of predicted vs. actual returns
+plt.figure(figsize=(10, 6))
+sns.scatterplot(x=y_test, y=y_pred)
+plt.xlabel('Actual Returns')
+plt.ylabel('Predicted Returns')
+plt.title('Predicted vs. Actual Returns')
+plt.savefig('predicted_vs_actual.png')
