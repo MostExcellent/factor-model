@@ -2,8 +2,8 @@
 5 factor model for stocks.
 Data is gathered using the Bloomberg API and requires a subsciption.
 The factors are market premium, size, value, profitability, and investment.
-Note that they have not all been fully implemented. Size premium hasn
-Size premium has yet to be implemented. factor-score is incomplete.
+
+Size premium has yet to be implemented properly. factor-score is incomplete.
 
 ## factor-score.py
 Calculates factors, and a score based on those factors. The data, sorted by score, is then printed and saved to an Excel file.
