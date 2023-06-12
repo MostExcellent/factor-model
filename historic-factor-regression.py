@@ -372,6 +372,7 @@ plt.savefig('predicted_vs_actual.png')
 n_samples = 1000
 
 residuals = []
+feature_importances = []
 mse_vals = []
 r2_vals = []
 
@@ -389,18 +390,31 @@ for _ in range(n_samples):
     y_pred, mse, r2 = test_model(rf, x_test_sample, y_test_sample)
 
     # Record the results
+    feature_importances.append(rf.feature_importances_)
     residuals.append(y_test_sample - y_pred)
     mse_vals.append(mse)
     r2_vals.append(r2)
 
-# Now we can calculate the confidence intervals for MSE and R^2
+# Now we can calculate the confidence intervals
 confidence_level = 0.95
+
+feature_importances_transposed = list(map(list, zip(*feature_importances)))
+feature_confidence_intervals = []
+
+for feature_importances in feature_importances_transposed:
+    lower = np.percentile(feature_importances, ((1 - confidence_level) / 2) * 100)
+    upper = np.percentile(feature_importances, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+    feature_confidence_intervals.append((lower, upper))
+
 residuals_lower = np.percentile(residuals, ((1 - confidence_level) / 2) * 100)
 residuals_upper = np.percentile(residuals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
 mse_lower = np.percentile(mse_vals, ((1 - confidence_level) / 2) * 100)
 mse_upper = np.percentile(mse_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
 r2_lower = np.percentile(r2_vals, ((1 - confidence_level) / 2) * 100)
 r2_upper = np.percentile(r2_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+
+for i, (lower, upper) in enumerate(feature_confidence_intervals):
+    print(f"{confidence_level*100}% confidence interval for feature {i}'s importance: ({lower}, {upper})")
 
 print(f"{confidence_level*100}% confidence interval for residuals: ({residuals_lower}, {residuals_upper})")
 print(f"{confidence_level*100}% confidence interval for MSE: ({mse_lower}, {mse_upper})")
