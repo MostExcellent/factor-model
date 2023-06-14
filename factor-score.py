@@ -1,5 +1,6 @@
 import pandas as pd
 import blpapi  # The Bloomberg API
+import datetime
 
 session = blpapi.Session()  # Start a Bloomberg session
 session.start()
@@ -12,10 +13,43 @@ if not session.openService("//blp/refdata"):
 
 ref_data_service = session.getService("//blp/refdata")
 
-tickers = ['AAPL US Equity', 'GOOGL US Equity', 'MSFT US Equity', 'AMZN US Equity', 'META US Equity']  # Bloomberg format for tickers
 fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH', 'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']  # Bloomberg fields
 
 data = []
+current_year = datetime.datetime.now().year
+index = "SPX Index"  # S&P 500 Index
+
+def get_index_members(index, year):
+    """
+    Gets the index members for the given index and year.
+    """
+    request = ref_data_service.createRequest("ReferenceDataRequest")
+    request.append("securities", index)
+    request.append("fields", "INDX_MEMBERS")
+
+    overrides = request.getElement('overrides')
+    override1 = overrides.appendElement()
+    override1.setElement('fieldId', 'REFERENCE_DATE')
+    override1.setElement('value', f"{year}1231")
+
+    session.sendRequest(request)
+
+    members = []
+    event = event_loop(session)
+    for msg in event:
+        securityDataArray = msg.getElement('securityData')
+        for securityData in securityDataArray.values():
+            fieldData = securityData.getElement('fieldData')
+            indx_members = fieldData.getElement('INDX_MEMBERS')
+            for indx_member in indx_members.values():
+                member_string = indx_member.getElementAsString('Member Ticker and Exchange Code')
+                member_string = member_string.replace(" UW", " US Equity").replace(" UN", " US Equity")
+                members.append(member_string)
+
+    print(f"members: {members[:5]}...")
+    return members
+
+tickers = get_index_members(index, current_year)  # Get all S&P 500 members for the current year
 
 for ticker in tickers:
     request = ref_data_service.createRequest("ReferenceDataRequest")
@@ -63,7 +97,8 @@ df['ProfitabilityNorm'] = (df['Profitability'] - df['Profitability'].mean()) / d
 df['InvestmentNorm'] = (df['Investment'] - df['Investment'].mean()) / df['Investment'].std()
 
 # Calculate score as a sum of all normalized factors (equal weight to all factors)
-df['Score'] = df[['SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)
+#df['Score'] = df[['SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)
+df['Score'] = df[['ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].mean(axis=1)
 
 # Sort dataframe by score
 df_sorted = df.sort_values('Score', ascending=False)
