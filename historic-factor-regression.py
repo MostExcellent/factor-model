@@ -33,9 +33,11 @@ if not session.openService("//blp/refdata"):
 
 ref_data_service = session.getService("//blp/refdata")
 
-fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH', 'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']  # Bloomberg fields
+fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
+          'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']  # Bloomberg fields
 
 years = np.arange(START_YEAR, END_YEAR)  # Sample period
+
 
 def event_loop(session, timeout=7000):
     """
@@ -53,6 +55,7 @@ def event_loop(session, timeout=7000):
 
 # TODO: separate the code for making a request.
 
+
 def fetch_field_data(field_data, field_name):
     """
     Fetches the data for a specific field from the field data.
@@ -61,6 +64,7 @@ def fetch_field_data(field_data, field_name):
         return field_data.getElementAsFloat(field_name)
     else:
         return np.nan
+
 
 def get_index_members(index, year):
     """
@@ -85,12 +89,15 @@ def get_index_members(index, year):
             fieldData = securityData.getElement('fieldData')
             indx_members = fieldData.getElement('INDX_MEMBERS')
             for indx_member in indx_members.values():
-                member_string = indx_member.getElementAsString('Member Ticker and Exchange Code')
-                member_string = member_string.replace(" UW", " US Equity").replace(" UN", " US Equity")
+                member_string = indx_member.getElementAsString(
+                    'Member Ticker and Exchange Code')
+                member_string = member_string.replace(
+                    " UW", " US Equity").replace(" UN", " US Equity")
                 members.append(member_string)
 
     print(f"members: {members[:5]}...")
     return members
+
 
 def get_data(fields, years, index=INDEX):
     """
@@ -103,29 +110,33 @@ def get_data(fields, years, index=INDEX):
         for ticker in get_index_members(index, year):
             #print(f'Processing {ticker}')
             try:
-                request = ref_data_service.createRequest("HistoricalDataRequest")
+                request = ref_data_service.createRequest(
+                    "HistoricalDataRequest")
                 request.set("periodicityAdjustment", "ACTUAL")
                 request.set("periodicitySelection", "YEARLY")
                 request.set("startDate", f"{year}0101")
-                request.set("endDate", f"{year}1231") # changed end date to end of the year
+                # changed end date to end of the year
+                request.set("endDate", f"{year}1231")
                 request.set("nonTradingDayFillOption", "ALL_CALENDAR_DAYS")
                 request.set("nonTradingDayFillMethod", "PREVIOUS_VALUE")
                 request.append("securities", ticker)
                 for field in fields:
                     request.append("fields", field)
-            
+
                 session.sendRequest(request)
 
                 event = event_loop(session)
 
                 # Get the response
                 for msg in event:
-                    if msg.hasElement('securityData'): # check if 'securityData' is present
+                    # check if 'securityData' is present
+                    if msg.hasElement('securityData'):
                         security_data = msg.getElement('securityData')
                     else:
                         continue
 
-                    field_exceptions = security_data.getElement('fieldExceptions')
+                    field_exceptions = security_data.getElement(
+                        'fieldExceptions')
 
                     # If there are any field exceptions, skip this ticker for this year
                     if field_exceptions.numValues() > 0:
@@ -137,10 +148,13 @@ def get_data(fields, years, index=INDEX):
                         field_data = field_data_array.getValueAsElement(j)
 
                         last_price = fetch_field_data(field_data, 'PX_LAST')
-                        market_cap = fetch_field_data(field_data, 'CUR_MKT_CAP')
-                        book_value_per_share = fetch_field_data(field_data, 'BOOK_VAL_PER_SH')
+                        market_cap = fetch_field_data(
+                            field_data, 'CUR_MKT_CAP')
+                        book_value_per_share = fetch_field_data(
+                            field_data, 'BOOK_VAL_PER_SH')
                         roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
-                        free_cash_flow = fetch_field_data(field_data, 'CF_FREE_CASH_FLOW')
+                        free_cash_flow = fetch_field_data(
+                            field_data, 'CF_FREE_CASH_FLOW')
 
                         data_rows.append({
                             'Year': year,
@@ -163,19 +177,20 @@ def get_data(fields, years, index=INDEX):
                     'ROE': np.nan,
                     'FreeCashFlow': np.nan,
                 })
-                
+
     df = pd.DataFrame(data_rows)
     print(df)
 
     # Handle missing values by interpolation, then drop remaining NaNs
     print(df.head())
-    df = df.groupby('Ticker').apply(lambda group: group.interpolate(method='linear'))
+    df = df.groupby('Ticker').apply(
+        lambda group: group.interpolate(method='linear'))
     df.dropna(inplace=True)
 
     return df
 
 
-def get_risk_free_rate(years = years):
+def get_risk_free_rate(years=years):
     """
     Returns average risk free rate for each year in years as a dictionary
     """
@@ -188,12 +203,13 @@ def get_risk_free_rate(years = years):
     request.set("periodicityAdjustment", "MONTHLY")
     request.set("periodicitySelection", "MONTHLY")
     request.set("startDate", f"{years[0]}0101")
-    request.set("endDate", f"{years[-1]}1231") # Remember, we want the average for the year
+    # Remember, we want the average for the year
+    request.set("endDate", f"{years[-1]}1231")
     request.set("nonTradingDayFillOption", "ALL_CALENDAR_DAYS")
     request.set("nonTradingDayFillMethod", "PREVIOUS_VALUE")
 
     event = event_loop(session)
-    
+
     for msg in event:
         security_data = msg.getElement('securityData')
         field_data = security_data.getElement('fieldData')
@@ -207,19 +223,24 @@ def get_risk_free_rate(years = years):
 
         df_rates = pd.DataFrame(rate_data, columns=['Year', 'Rate'])
         risk_free_rates = df_rates.groupby('Year').mean().to_dict()['Rate']
-    
+
     return risk_free_rates
 
 # Noralization helper function
+
+
 def normalize(x):
     return (x - x.mean()) / x.std()
 
 # Cap and floor outliers
+
+
 def cap_and_floor(df, column, lower_percentile, upper_percentile):
     lower, upper = df[column].quantile([lower_percentile, upper_percentile])
     df[column] = np.where(df[column] < lower, lower, df[column])
     df[column] = np.where(df[column] > upper, upper, df[column])
     return df
+
 
 def process_factors(df):
     """
@@ -227,10 +248,12 @@ def process_factors(df):
     """
     print("Processing factors...")
     df_copy = df.copy()
-    df_copy['MarketPremium'] = df_copy.groupby('Ticker')['LastPrice'].pct_change() - df_copy['RiskFreeRate']
-     # Size premium is incorrect, and is a plaholder
-    df_copy['Size'] = df_copy['MarketCap'] # This is still useful for the regressor, however
-    df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']  
+    df_copy['MarketPremium'] = df_copy.groupby(
+        'Ticker')['LastPrice'].pct_change() - df_copy['RiskFreeRate']
+    # Size premium is incorrect, and is a plaholder
+    # This is still useful for the regressor, however
+    df_copy['Size'] = df_copy['MarketCap']
+    df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']
     df_copy['Profitability'] = df_copy['ROE']
     df_copy['Investment'] = df_copy['FreeCashFlow'] / df_copy['MarketCap']
 
@@ -242,9 +265,11 @@ def process_factors(df):
     df_copy['InvestmentNorm'] = normalize(df_copy['Investment'])
 
     # Calculate score as a sum of all normalized factors (equal weight to all factors)
-    df_copy['Score'] = df_copy[['MarketPremiumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)
+    df_copy['Score'] = df_copy[['MarketPremiumNorm', 'SizeNorm',
+                                'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)
 
     return df_copy
+
 
 def train_model(x_train, y_train):
     print("Training model...")
@@ -252,12 +277,14 @@ def train_model(x_train, y_train):
     rf.fit(x_train, y_train)
     return rf
 
+
 def test_model(rf, x_test, y_test):
     print("Testing model...")
     y_pred = rf.predict(x_test)
     mse = mean_squared_error(y_test, y_pred)
     r2 = r2_score(y_test, y_pred)
     return y_pred, mse, r2
+
 
 # Load data from csv if it exists, else fetch from Bloomberg API
 csv_file = 'data.csv'
@@ -316,7 +343,8 @@ df['ForwardReturn'] = df.groupby('Ticker')['LastPrice'].pct_change(-1)
 # Drop the last row for each ticker as it will have a NaN for ForwardReturn
 df.dropna(subset=['ForwardReturn'], inplace=True)
 # Normalize forward returns
-df['ForwardReturnNorm'] = df.groupby('Year')['ForwardReturn'].transform(normalize)
+df['ForwardReturnNorm'] = df.groupby(
+    'Year')['ForwardReturn'].transform(normalize)
 
 # Group by ticker and year and calculate factors
 df_grouped = df.groupby(['Ticker', 'Year']).apply(process_factors)
@@ -329,14 +357,16 @@ df_grouped.to_csv(csv_processed, index=False)
 
 # Now we do a regression
 
-features = ['MarketPremiumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm'] #,'Score']
+features = ['MarketPremiumNorm', 'SizeNorm', 'ValueNorm',
+            'ProfitabilityNorm', 'InvestmentNorm']  # ,'Score']
 target = 'ForwardReturnNorm'
 
 x = df_grouped[features]
 y = df_grouped[target]
 
 # Split data into train and test sets
-x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
+x_train, x_test, y_train, y_test = train_test_split(
+    x, y, test_size=0.2, random_state=42)
 
 # Initialize and fit model
 rf = train_model(x_train, y_train)
@@ -399,7 +429,8 @@ for _ in range(n_samples):
     y_sample = sample_df[target]
 
     # Split data into train and test sets
-    x_train_sample, x_test_sample, y_train_sample, y_test_sample = train_test_split(x_sample, y_sample, test_size=0.2, random_state=42)
+    x_train_sample, x_test_sample, y_train_sample, y_test_sample = train_test_split(
+        x_sample, y_sample, test_size=0.2, random_state=42)
 
     # Train and test model on the bootstrap sample
     rf = train_model(x_train_sample, y_train_sample)
@@ -418,16 +449,21 @@ feature_importances_transposed = list(map(list, zip(*feature_importances)))
 feature_confidence_intervals = []
 
 for feature_importances in feature_importances_transposed:
-    lower = np.percentile(feature_importances, ((1 - confidence_level) / 2) * 100)
-    upper = np.percentile(feature_importances, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+    lower = np.percentile(feature_importances,
+                          ((1 - confidence_level) / 2) * 100)
+    upper = np.percentile(
+        feature_importances, (confidence_level + ((1 - confidence_level) / 2)) * 100)
     feature_confidence_intervals.append((lower, upper))
 
 residuals_lower = np.percentile(residuals, ((1 - confidence_level) / 2) * 100)
-residuals_upper = np.percentile(residuals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+residuals_upper = np.percentile(
+    residuals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
 mse_lower = np.percentile(mse_vals, ((1 - confidence_level) / 2) * 100)
-mse_upper = np.percentile(mse_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+mse_upper = np.percentile(
+    mse_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
 r2_lower = np.percentile(r2_vals, ((1 - confidence_level) / 2) * 100)
-r2_upper = np.percentile(r2_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+r2_upper = np.percentile(
+    r2_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
 
 for i, (lower, upper) in enumerate(feature_confidence_intervals):
     print(f"{confidence_level*100}% confidence interval for feature {i}'s importance: ({lower}, {upper})")

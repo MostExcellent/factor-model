@@ -168,17 +168,22 @@ plt.savefig('correlation_matrix.png')
 
 # Scatter plot of predicted vs. actual returns
 plt.figure(figsize=(10, 6))
-sns.scatterplot(x=y_test, y=y_pred)
+plt.scatter(y_test, y_pred)
+# Calculate the coefficients of the line of best fit.
+slope, intercept = np.polyfit(y_test, y_pred, 1)
+best_fit_line = np.poly1d([slope, intercept])
+x_values = np.linspace(min(y_test), max(y_test), 100)
+plt.plot(x_values, best_fit_line(x_values), color='red')
 plt.xlabel('Actual Returns')
 plt.ylabel('Predicted Returns')
 plt.title('Predicted vs. Actual Returns')
 plt.savefig('predicted_vs_actual.png')
 
 # remove later
-exit()
+#exit()
 
 # Bootstrap analysis
-n_samples = 1000
+n_samples = 100 #1000
 
 residuals = []
 feature_importances = []
