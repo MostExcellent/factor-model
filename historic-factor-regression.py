@@ -70,7 +70,7 @@ def get_index_members(index, year):
     overrides = request.getElement('overrides')
     override1 = overrides.appendElement()
     override1.setElement('fieldId', 'REFERENCE_DATE')
-    override1.setElement('value', f"{year}-12-31")
+    override1.setElement('value', f"{year}1231")
 
     session.sendRequest(request)
 
@@ -102,8 +102,8 @@ def get_data(fields, years, index=INDEX):
                 request = ref_data_service.createRequest("HistoricalDataRequest")
                 request.set("periodicityAdjustment", "ACTUAL")
                 request.set("periodicitySelection", "YEARLY")
-                request.set("startDate", f"{year}-01-01")
-                request.set("endDate", f"{year}-12-31") # changed end date to end of the year
+                request.set("startDate", f"{year}0101")
+                request.set("endDate", f"{year}1231") # changed end date to end of the year
                 request.set("nonTradingDayFillOption", "ALL_CALENDAR_DAYS")
                 request.set("nonTradingDayFillMethod", "PREVIOUS_VALUE")
                 request.append("securities", ticker)
@@ -185,8 +185,8 @@ def get_risk_free_rate(years = years):
     request.set("fields", "PX_LAST")
     request.set("periodicityAdjustment", "MONTHLY")
     request.set("periodicitySelection", "MONTHLY")
-    request.set("startDate", f"{years[0]}-01-01")
-    request.set("endDate", f"{years[-1]}-12-31") # Remember, we want the average for the year
+    request.set("startDate", f"{years[0]}0101")
+    request.set("endDate", f"{years[-1]}1231") # Remember, we want the average for the year
     request.set("nonTradingDayFillOption", "ALL_CALENDAR_DAYS")
     request.set("nonTradingDayFillMethod", "PREVIOUS_VALUE")
 
