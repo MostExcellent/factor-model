@@ -49,37 +49,38 @@ def process_factors(df):
     return df_copy
 
 
-def train_model(x_train, y_train):
+def train_model(x_train, y_train, params=None):
+    best_params = params
+    if best_params is None:
+        # Hyperparameter tuning
+        # Define the parameter grid
+        param_grid = {
+            'n_estimators': [10, 50, 100, 200],
+            'max_depth': [None, 10, 20, 30],
+            'min_samples_split': [2, 5, 10],
+            'min_samples_leaf': [1, 2, 4],
+            'max_features': ['auto', 'sqrt']
+        }
 
-    # Hyperparameter tuning
-    # Define the parameter grid
-    param_grid = {
-        'n_estimators': [10, 50, 100, 200],
-        'max_depth': [None, 10, 20, 30],
-        'min_samples_split': [2, 5, 10],
-        'min_samples_leaf': [1, 2, 4],
-        'max_features': ['auto', 'sqrt']
-    }
+        rf = RandomForestRegressor()
 
-    rf = RandomForestRegressor()
+        # Instantiate the grid search model
+        grid_search = GridSearchCV(
+            estimator=rf, param_grid=param_grid, cv=3, n_jobs=-1, verbose=2)
 
-    # Instantiate the grid search model
-    grid_search = GridSearchCV(
-        estimator=rf, param_grid=param_grid, cv=3, n_jobs=-1, verbose=2)
+        # Fit the grid search to the data
+        print("Tuning hyperparameters...")
+        grid_search.fit(x_train, y_train)
 
-    # Fit the grid search to the data
-    print("Tuning hyperparameters...")
-    grid_search.fit(x_train, y_train)
-
-    # Check the best parameters
-    best_params = grid_search.best_params_
-    print(f"Best parameters: {best_params}")
+        # Check the best parameters
+        best_params = grid_search.best_params_
+        print(f"Best parameters: {best_params}")
 
     print("Training model...")
     best_model = RandomForestRegressor(**best_params)
     best_model.fit(x_train, y_train)
 
-    return best_model
+    return best_model, best_params
 
 
 def test_model(rf, x_test, y_test):
@@ -132,7 +133,7 @@ y = df_grouped[target]
 x_train, x_test, y_train, y_test = train_test_split(
     x, y, test_size=0.2, random_state=42)
 
-rf = train_model(x_train, y_train)
+rf, best_params = train_model(x_train, y_train)
 y_pred, mse, r2 = test_model(rf, x_test, y_test)
 
 print("MSE: ", mse)
@@ -192,7 +193,7 @@ r2_vals = []
 
 for _ in range(n_samples):
     # Bootstrap sample (with replacement)
-    sample_df = df_grouped.sample(frac=1, replace=True, random_state=42)
+    sample_df = df_grouped.sample(frac=1, replace=True)
     x_sample = sample_df[features]
     y_sample = sample_df[target]
 
@@ -201,7 +202,7 @@ for _ in range(n_samples):
         x_sample, y_sample, test_size=0.2, random_state=42)
 
     # Train and test model on the bootstrap sample
-    rf = train_model(x_train_sample, y_train_sample)
+    rf, _ = train_model(x_train_sample, y_train_sample, best_params)
     y_pred, mse, r2 = test_model(rf, x_test_sample, y_test_sample)
 
     # Record the results
