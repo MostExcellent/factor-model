@@ -1,5 +1,5 @@
 # factor-model
-5 factor model for stocks.
+Factor model for stocks.
 Data is gathered using the Bloomberg API and requires a subsciption.
 The factors are market premium, size, value, profitability, and investment.
 
