@@ -205,6 +205,11 @@ feature_importances = []
 mse_vals = []
 r2_vals = []
 
+# Naive model
+naive_residuals = []
+naive_mse_vals = []
+naive_r2_vals = []
+
 # Split data into train and test sets
 x_train, x_test, y_train, y_test = train_test_split(
     x, y, test_size=0.2, random_state=42)
@@ -223,11 +228,21 @@ for _ in range(n_samples):
     rf, _ = train_model(x_sample, y_sample, best_params)
     y_pred, mse, r2 = test_model(rf, x_test, y_test)
 
+    naive = NaiveModel()
+    naive.fit(x_sample, y_sample)
+    y_pred_naive = naive.predict(x_test)
+
     # Record the results
     feature_importances.append(rf.feature_importances_)
     residuals.append(y_test - y_pred)
     mse_vals.append(mse)
     r2_vals.append(r2)
+    # Naive model results
+    naive_residuals.append(y_test - y_pred_naive)
+    naive_mse = mean_squared_error(y_test, y_pred_naive)
+    naive_r2 = r2_score(y_test, y_pred_naive)
+    naive_mse_vals.append(naive_mse)
+    naive_r2_vals.append(naive_r2)
 
 # Now we can calculate the confidence intervals
 confidence_level = 0.95
@@ -251,6 +266,17 @@ mse_upper = np.percentile(
 r2_lower = np.percentile(r2_vals, ((1 - confidence_level) / 2) * 100)
 r2_upper = np.percentile(
     r2_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+
+naive_residuals_lower = np.percentile(naive_residuals, ((1 - confidence_level) / 2) * 100)
+naive_residuals_upper = np.percentile(naive_residuals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+naive_mse_lower = np.percentile(naive_mse_vals, ((1 - confidence_level) / 2) * 100)
+naive_mse_upper = np.percentile(naive_mse_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+naive_r2_lower = np.percentile(naive_r2_vals, ((1 - confidence_level) / 2) * 100)
+naive_r2_upper = np.percentile(naive_r2_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+
+print(f"{confidence_level*100}% confidence interval for naive model residuals: ({naive_residuals_lower}, {naive_residuals_upper})")
+print(f"{confidence_level*100}% confidence interval for naive model MSE: ({naive_mse_lower}, {naive_mse_upper})")
+print(f"{confidence_level*100}% confidence interval for naive model R^2: ({naive_r2_lower}, {naive_r2_upper})")
 
 for i, (lower, upper) in enumerate(feature_confidence_intervals):
     print(f"{confidence_level*100}% confidence interval for feature {i}'s importance: ({lower}, {upper})")
