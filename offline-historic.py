@@ -36,16 +36,16 @@ def process_factors(df):
     df_copy['Size'] = df_copy['MarketCap']
     df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']
     df_copy['Profitability'] = df_copy['ROE']
-    df_copy['Investment'] = df_copy['FreeCashFlow'] / df_copy['MarketCap']
+    df_copy['FCF'] = df_copy['FreeCashFlow'] / df_copy['MarketCap']
 
     df_copy['MomentumNorm'] = normalize(df_copy['Momentum'])
     df_copy['SizeNorm'] = normalize(df_copy['Size'])
     df_copy['ValueNorm'] = normalize(df_copy['Value'])
     df_copy['ProfitabilityNorm'] = normalize(df_copy['Profitability'])
-    df_copy['InvestmentNorm'] = normalize(df_copy['Investment'])
+    df_copy['FCFNorm'] = normalize(df_copy['FCF'])
 
     df_copy['Score'] = df_copy[['MomentumNorm', 'SizeNorm',
-                                'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)
+                                'ValueNorm', 'ProfitabilityNorm', 'FCFNorm']].sum(axis=1)
 
     return df_copy
 
@@ -91,6 +91,11 @@ def test_model(rf, x_test, y_test):
     r2 = r2_score(y_test, y_pred)
     return y_pred, mse, r2
 
+class NaiveModel:
+    def fit(self, X, y):
+        self.mean = y.mean()
+    def predict(self, X):
+        return np.full((len(X), ), self.mean)
 
 csv_file = 'data.csv'
 
@@ -117,11 +122,11 @@ df['ForwardReturnNorm'] = df.groupby(
 #df_grouped = df.groupby(['Ticker', 'Year']).apply(process_factors)
 df_grouped = process_factors(df)
 print(df_grouped[['Momentum', 'ForwardReturn', 'Size',
-      'Value', 'Profitability', 'Investment']].isnull().sum())
+      'Value', 'Profitability', 'FCF']].isnull().sum())
 df_grouped.reset_index(inplace=True, drop=True)
 
-features = ['MomentumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']
-#features = ['SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']
+features = ['MomentumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'FCFNorm']
+#features = ['SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'FCFNorm']
 target = 'ForwardReturnNorm'
 
 print(df_grouped)
@@ -139,6 +144,14 @@ y_pred, mse, r2 = test_model(rf, x_test, y_test)
 
 print("MSE: ", mse)
 print("R2: ", r2)
+
+naive_model = NaiveModel()
+naive_model.fit(x_train, y_train)
+y_pred_naive = naive_model.predict(x_test)
+mse_naive = mean_squared_error(y_test, y_pred_naive)
+r2_naive = r2_score(y_test, y_pred_naive)
+print("Naive MSE: ", mse_naive)
+print("Naive R2: ", r2_naive)
 
 # Generate plots
 
@@ -192,23 +205,27 @@ feature_importances = []
 mse_vals = []
 r2_vals = []
 
+# Split data into train and test sets
+x_train, x_test, y_train, y_test = train_test_split(
+    x, y, test_size=0.2, random_state=42)
+
+# Prepare a DataFrame from the training data for bootstrap sampling
+train_df = pd.concat([x_train, y_train], axis=1)
+
+# Start the bootstrap analysis
 for _ in range(n_samples):
-    # Bootstrap sample (with replacement)
-    sample_df = df_grouped.sample(frac=1, replace=True)
+    # Bootstrap sample (with replacement) from the training data only
+    sample_df = train_df.sample(frac=1, replace=True)
     x_sample = sample_df[features]
     y_sample = sample_df[target]
 
-    # Split data into train and test sets
-    x_train_sample, x_test_sample, y_train_sample, y_test_sample = train_test_split(
-        x_sample, y_sample, test_size=0.2, random_state=42)
-
-    # Train and test model on the bootstrap sample
-    rf, _ = train_model(x_train_sample, y_train_sample, best_params)
-    y_pred, mse, r2 = test_model(rf, x_test_sample, y_test_sample)
+    # Train and test model on the bootstrap sample and the untouched test data
+    rf, _ = train_model(x_sample, y_sample, best_params)
+    y_pred, mse, r2 = test_model(rf, x_test, y_test)
 
     # Record the results
     feature_importances.append(rf.feature_importances_)
-    residuals.append(y_test_sample - y_pred)
+    residuals.append(y_test - y_pred)
     mse_vals.append(mse)
     r2_vals.append(r2)
 
