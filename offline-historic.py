@@ -31,19 +31,20 @@ def process_factors(df):
     print("Processing factors...")
     df_copy = df.copy()
     # Will add risk free rate when I get that working
-    df_copy['MarketPremium'] = df_copy['ForwardReturn']
+    # shift returns back one year
+    df_copy['Momentum'] = df_copy['ForwardReturn'].shift(1)
     df_copy['Size'] = df_copy['MarketCap']
     df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']
     df_copy['Profitability'] = df_copy['ROE']
     df_copy['Investment'] = df_copy['FreeCashFlow'] / df_copy['MarketCap']
 
-    df_copy['MarketPremiumNorm'] = normalize(df_copy['MarketPremium'])
+    df_copy['MomentumNorm'] = normalize(df_copy['Momentum'])
     df_copy['SizeNorm'] = normalize(df_copy['Size'])
     df_copy['ValueNorm'] = normalize(df_copy['Value'])
     df_copy['ProfitabilityNorm'] = normalize(df_copy['Profitability'])
     df_copy['InvestmentNorm'] = normalize(df_copy['Investment'])
 
-    df_copy['Score'] = df_copy[['MarketPremiumNorm', 'SizeNorm',
+    df_copy['Score'] = df_copy[['MomentumNorm', 'SizeNorm',
                                 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)
 
     return df_copy
@@ -115,12 +116,12 @@ df['ForwardReturnNorm'] = df.groupby(
 
 #df_grouped = df.groupby(['Ticker', 'Year']).apply(process_factors)
 df_grouped = process_factors(df)
-print(df_grouped[['MarketPremium', 'ForwardReturn', 'Size',
+print(df_grouped[['Momentum', 'ForwardReturn', 'Size',
       'Value', 'Profitability', 'Investment']].isnull().sum())
 df_grouped.reset_index(inplace=True, drop=True)
 
-# features = ['MarketPremiumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']
-features = ['SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']
+features = ['MomentumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']
+#features = ['SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']
 target = 'ForwardReturnNorm'
 
 print(df_grouped)
