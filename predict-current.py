@@ -69,4 +69,4 @@ df['Score'] = model.predict(df[features])
 # Save the data with the predictions
 df.to_csv('scored_data.csv', index=False)
 
-print(f"Predictions saved to 'scored_data.csv'")
+print("Predictions saved to 'scored_data.csv'")
