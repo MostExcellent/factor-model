@@ -119,12 +119,13 @@ else:
     print(f"File {csv_file} not found. Exiting...")
     exit()
 
-df = cap_and_floor(df, 'LastPrice', 0.01, 0.99)
-df = cap_and_floor(df, 'MarketCap', 0.01, 0.99)
-df = cap_and_floor(df, 'BookValuePerShare', 0.01, 0.99)
-df = cap_and_floor(df, 'ROE', 0.01, 0.99)
-df = cap_and_floor(df, 'FreeCashFlow', 0.01, 0.99)
+# df = cap_and_floor(df, 'LastPrice', 0.01, 0.99)
+# df = cap_and_floor(df, 'MarketCap', 0.01, 0.99)
+# df = cap_and_floor(df, 'BookValuePerShare', 0.01, 0.99)
+# df = cap_and_floor(df, 'ROE', 0.01, 0.99)
+# df = cap_and_floor(df, 'FreeCashFlow', 0.01, 0.99)
 
+df = df.sort_values(by=['Ticker', 'Year'])
 df['ForwardReturn'] = df.groupby('Ticker')['LastPrice'].pct_change(-1)
 df.dropna(subset=['ForwardReturn'], inplace=True)
 df['ForwardReturnNorm'] = df.groupby(
@@ -214,7 +215,7 @@ plt.savefig('predicted_vs_actual.png')
 # exit()
 
 # Bootstrap analysis
-n_samples = 100  # 1000
+n_samples = 1000
 
 residuals = []
 feature_importances = []
