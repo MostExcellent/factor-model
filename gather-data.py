@@ -34,7 +34,7 @@ if not session.openService("//blp/refdata"):
 ref_data_service = session.getService("//blp/refdata")
 
 fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
-          'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW', 'INDUSTRY_SECTOR']  # Bloomberg fields
+          'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']  # Bloomberg fields
 
 years = np.arange(START_YEAR, END_YEAR)  # Sample period
 
@@ -95,6 +95,27 @@ def get_index_members(index, year):
     print(f"members: {members[:5]}...")
     return members
 
+def get_industry_sector(ticker):
+    """
+    Gets the industry sector for the given ticker.
+    """
+    request = ref_data_service.createRequest("ReferenceDataRequest")
+    request.append("securities", ticker)
+    request.append("fields", "INDUSTRY_SECTOR")
+
+    session.sendRequest(request)
+    
+    event = event_loop(session)
+    for msg in event:
+        securityDataArray = msg.getElement('securityData')
+        for securityData in securityDataArray.values():
+            fieldData = securityData.getElement('fieldData')
+            if fieldData.hasElement('INDUSTRY_SECTOR'):
+                industry_sector = fieldData.getElementAsString('INDUSTRY_SECTOR')
+            else:
+                industry_sector = np.nan
+
+    return industry_sector
 
 def get_data(fields, years, index=INDEX):
     """
@@ -152,7 +173,7 @@ def get_data(fields, years, index=INDEX):
                         roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
                         free_cash_flow = fetch_field_data(
                             field_data, 'CF_FREE_CASH_FLOW')
-                        industry_sector = fetch_field_data(field_data, 'INDUSTRY_SECTOR')
+                        industry_sector = get_industry_sector(ticker)
 
                         data_rows.append({
                             'Year': year,
@@ -164,6 +185,7 @@ def get_data(fields, years, index=INDEX):
                             'FreeCashFlow': free_cash_flow,
                             'IndustrySector': industry_sector,
                         })
+                        print(data_rows)
             except Exception as e:
                 print(f"Error for {ticker} in {year}: {e}")
                 # Append a placeholder row with NaNs in case there are issues. (for delisted stocks?)
@@ -188,7 +210,6 @@ def get_data(fields, years, index=INDEX):
     df.dropna(inplace=True)
 
     return df
-
 
 def get_risk_free_rate(years=years):
     """
