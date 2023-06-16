@@ -6,6 +6,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+import pickle
 
 
 def normalize(x):
@@ -36,16 +37,16 @@ def process_factors(df):
     df_copy['Size'] = df_copy['MarketCap']
     df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']
     df_copy['Profitability'] = df_copy['ROE']
-    df_copy['FCF'] = df_copy['FreeCashFlow'] / df_copy['MarketCap']
+    df_copy['Investment'] = df_copy['FreeCashFlow'] / df_copy['MarketCap']
 
     df_copy['MomentumNorm'] = normalize(df_copy['Momentum'])
     df_copy['SizeNorm'] = normalize(df_copy['Size'])
     df_copy['ValueNorm'] = normalize(df_copy['Value'])
     df_copy['ProfitabilityNorm'] = normalize(df_copy['Profitability'])
-    df_copy['FCFNorm'] = normalize(df_copy['FCF'])
+    df_copy['InvestmentNorm'] = normalize(df_copy['Investment'])
 
     df_copy['Score'] = df_copy[['MomentumNorm', 'SizeNorm',
-                                'ValueNorm', 'ProfitabilityNorm', 'FCFNorm']].sum(axis=1)
+                                'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)
 
     return df_copy
 
@@ -122,11 +123,11 @@ df['ForwardReturnNorm'] = df.groupby(
 #df_grouped = df.groupby(['Ticker', 'Year']).apply(process_factors)
 df_grouped = process_factors(df)
 print(df_grouped[['Momentum', 'ForwardReturn', 'Size',
-      'Value', 'Profitability', 'FCF']].isnull().sum())
+      'Value', 'Profitability', 'Investment']].isnull().sum())
 df_grouped.reset_index(inplace=True, drop=True)
 
-features = ['MomentumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'FCFNorm']
-#features = ['SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'FCFNorm']
+features = ['MomentumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']
+#features = ['SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']
 target = 'ForwardReturnNorm'
 
 print(df_grouped)
@@ -141,6 +142,10 @@ x_train, x_test, y_train, y_test = train_test_split(
 
 rf, best_params = train_model(x_train, y_train)
 y_pred, mse, r2 = test_model(rf, x_test, y_test)
+
+with open('model.pkl', 'wb') as file:
+    pickle.dump(rf, file)
+    file.close()
 
 print("MSE: ", mse)
 print("R2: ", r2)
