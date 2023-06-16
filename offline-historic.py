@@ -34,7 +34,7 @@ def process_factors(df):
 
     # shift returns back one year
     df_copy['Momentum'] = df_copy.groupby(
-        'Industry')['ForwardReturn'].transform(lambda x: x.shift(1))
+        'Ticker')['ForwardReturn'].transform(lambda x: x.shift(1))
     df_copy['Size'] = df_copy['MarketCap']
     df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']
     df_copy['Profitability'] = df_copy['ROE']
@@ -42,15 +42,15 @@ def process_factors(df):
 
     # Normalize within each industry
     df_copy['MomentumNorm'] = df_copy.groupby(
-        'Industry')['Momentum'].transform(normalize)
+        'IndustrySector')['Momentum'].transform(normalize)
     df_copy['SizeNorm'] = df_copy.groupby(
-        'Industry')['Size'].transform(normalize)
+        'IndustrySector')['Size'].transform(normalize)
     df_copy['ValueNorm'] = df_copy.groupby(
-        'Industry')['Value'].transform(normalize)
+        'IndustrySector')['Value'].transform(normalize)
     df_copy['ProfitabilityNorm'] = df_copy.groupby(
-        'Industry')['Profitability'].transform(normalize)
+        'IndustrySector')['Profitability'].transform(normalize)
     df_copy['InvestmentNorm'] = df_copy.groupby(
-        'Industry')['Investment'].transform(normalize)
+        'IndustrySector')['Investment'].transform(normalize)
 
     df_copy['Score'] = df_copy[['MomentumNorm', 'SizeNorm',
                                 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)

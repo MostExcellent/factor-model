@@ -3,9 +3,20 @@ import blpapi  # The Bloomberg API
 from datetime import datetime, timedelta
 import time
 import numpy as np
+import os
 
 session = blpapi.Session()  # Start a Bloomberg session
 session.start()
+
+tickers_file = 'tickers.txt'
+if os.path.exists(tickers_file):
+    tickers = []
+    with open(tickers_file, 'r') as file:
+        for line in file:
+            ticker = line.strip()  # Remove leading/trailing whitespace, including newline characters
+            tickers.append(ticker+ " US Equity")
+else:
+    tickers = []  # Empty list if the file doesn't exist
 
 INDEX = "SPX Index"  # S&P 500 Index
 
@@ -114,6 +125,27 @@ def get_previous_year_data(ticker, year):
 
     return last_price
 
+def get_industry_sector(ticker):
+    """
+    Gets the industry sector for the given ticker.
+    """
+    request = ref_data_service.createRequest("ReferenceDataRequest")
+    request.append("securities", ticker)
+    request.append("fields", "INDUSTRY_SECTOR")
+
+    session.sendRequest(request)
+    
+    event = event_loop(session)
+    for msg in event:
+        securityDataArray = msg.getElement('securityData')
+        for securityData in securityDataArray.values():
+            fieldData = securityData.getElement('fieldData')
+            if fieldData.hasElement('INDUSTRY_SECTOR'):
+                industry_sector = fieldData.getElementAsString('INDUSTRY_SECTOR')
+            else:
+                industry_sector = np.nan
+
+    return industry_sector
 
 def get_current_data(tickers):
     """
@@ -149,7 +181,7 @@ def get_current_data(tickers):
                 field_data, 'BOOK_VAL_PER_SH')
             roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
             free_cash_flow = fetch_field_data(field_data, 'CF_FREE_CASH_FLOW')
-            industry_sector = fetch_field_data(field_data, 'INDUSTRY_SECTOR')
+            industry_sector = get_industry_sector(ticker)
 
             data_rows.append({
                 'Ticker': ticker,
@@ -170,8 +202,9 @@ def get_current_data(tickers):
 
     return df
 
+to_get = tickers + get_index_members(INDEX)
 
 # Get data for all tickers and fields
-df = get_current_data(get_index_members(INDEX))
+df = get_current_data(list(set(to_get)))
 
 df.to_csv('current_data.csv', index=False)  # Save data to CSV file
