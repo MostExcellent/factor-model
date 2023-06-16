@@ -53,6 +53,7 @@ def event_loop(session, timeout=7000):
             break
     return event
 
+
 def fetch_field_data(field_data, field_name):
     """
     Fetches the data for a specific field from the field data.
@@ -95,6 +96,7 @@ def get_index_members(index, year):
     print(f"members: {members[:5]}...")
     return members
 
+
 def get_industry_sector(ticker):
     """
     Gets the industry sector for the given ticker.
@@ -104,18 +106,20 @@ def get_industry_sector(ticker):
     request.append("fields", "INDUSTRY_SECTOR")
 
     session.sendRequest(request)
-    
+
     event = event_loop(session)
     for msg in event:
         securityDataArray = msg.getElement('securityData')
         for securityData in securityDataArray.values():
             fieldData = securityData.getElement('fieldData')
             if fieldData.hasElement('INDUSTRY_SECTOR'):
-                industry_sector = fieldData.getElementAsString('INDUSTRY_SECTOR')
+                industry_sector = fieldData.getElementAsString(
+                    'INDUSTRY_SECTOR')
             else:
                 industry_sector = np.nan
 
     return industry_sector
+
 
 def get_data(fields, years, index=INDEX):
     """
@@ -211,6 +215,7 @@ def get_data(fields, years, index=INDEX):
 
     return df
 
+
 def get_risk_free_rate(years=years):
     """
     Returns average risk free rate for each year in years as a dictionary
@@ -247,6 +252,7 @@ def get_risk_free_rate(years=years):
 
     return risk_free_rates
 
+
 # Load data from csv if it exists, else fetch from Bloomberg API
 csv_file = 'data.csv'
 # Check if the file exists
@@ -272,6 +278,7 @@ except FileNotFoundError:
     print("File not found, fetching risk free rates from Bloomberg API")
     risk_free_rates = get_risk_free_rate()
     # Save risk_free_rates into a CSV file
-    pd.DataFrame(list(risk_free_rates.items()), columns=['Year', 'Rate']).to_csv(csv_risk_free_rates, index=False)
+    pd.DataFrame(list(risk_free_rates.items()), columns=[
+                 'Year', 'Rate']).to_csv(csv_risk_free_rates, index=False)
 
 #df['RiskFreeRate'] = df['Year'].map(risk_free_rates)

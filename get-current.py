@@ -17,11 +17,13 @@ if not session.openService("//blp/refdata"):
 
 ref_data_service = session.getService("//blp/refdata")
 
-fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH', 'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']  # Bloomberg fields
+fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
+          'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']  # Bloomberg fields
 
 data = []
 current_year = datetime.now().year
 index = "SPX Index"  # S&P 500 Index
+
 
 def event_loop(session, timeout=7000):
     """
@@ -37,6 +39,7 @@ def event_loop(session, timeout=7000):
             break
     return event
 
+
 def fetch_field_data(field_data, field_name):
     """
     Fetches the data for a specific field from the field data.
@@ -45,7 +48,8 @@ def fetch_field_data(field_data, field_name):
         return field_data.getElementAsFloat(field_name)
     else:
         return np.nan
-    
+
+
 def get_index_members(index):
     """
     Gets the current index members for the given index.
@@ -63,11 +67,14 @@ def get_index_members(index):
             fieldData = securityData.getElement('fieldData')
             indx_members = fieldData.getElement('INDX_MEMBERS')
             for indx_member in indx_members.values():
-                member_string = indx_member.getElementAsString('Member Ticker and Exchange Code')
-                member_string = member_string.replace(" UW", " US Equity").replace(" UN", " US Equity")
+                member_string = indx_member.getElementAsString(
+                    'Member Ticker and Exchange Code')
+                member_string = member_string.replace(
+                    " UW", " US Equity").replace(" UN", " US Equity")
                 members.append(member_string)
 
     return members
+
 
 def get_previous_year_data(ticker, year):
     """
@@ -107,11 +114,13 @@ def get_previous_year_data(ticker, year):
 
     return last_price
 
+
 def get_current_data(tickers):
     """
     Gets current data for the given tickers.
     """
-    fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH', 'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW', 'INDUSTRY_SECTOR']
+    fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
+              'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW', 'INDUSTRY_SECTOR']
 
     data_rows = []
     for ticker in tickers:
@@ -136,7 +145,8 @@ def get_current_data(tickers):
             field_data = security_data.getElement('fieldData')
             last_price = fetch_field_data(field_data, 'PX_LAST')
             market_cap = fetch_field_data(field_data, 'CUR_MKT_CAP')
-            book_value_per_share = fetch_field_data(field_data, 'BOOK_VAL_PER_SH')
+            book_value_per_share = fetch_field_data(
+                field_data, 'BOOK_VAL_PER_SH')
             roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
             free_cash_flow = fetch_field_data(field_data, 'CF_FREE_CASH_FLOW')
             industry_sector = fetch_field_data(field_data, 'INDUSTRY_SECTOR')
@@ -154,12 +164,14 @@ def get_current_data(tickers):
     df = pd.DataFrame(data_rows)
 
     # Handle missing values by interpolation, then drop remaining NaNs
-    df = df.groupby('Ticker').apply(lambda group: group.interpolate(method='linear'))
+    df = df.groupby('Ticker').apply(
+        lambda group: group.interpolate(method='linear'))
     df.dropna(inplace=True)
 
     return df
 
 
-df = get_current_data(get_index_members(INDEX))  # Get data for all tickers and fields
+# Get data for all tickers and fields
+df = get_current_data(get_index_members(INDEX))
 
 df.to_csv('current_data.csv', index=False)  # Save data to CSV file

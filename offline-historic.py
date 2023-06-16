@@ -19,33 +19,44 @@ def normalize(x):
         return (x - x.mean()) / x.std()
 
 # Cap and floor outliers
+
+
 def cap_and_floor(df, column, lower_percentile, upper_percentile):
     lower, upper = df[column].quantile([lower_percentile, upper_percentile])
     df[column] = np.where(df[column] < lower, lower, df[column])
     df[column] = np.where(df[column] > upper, upper, df[column])
     return df
 
+
 def process_factors(df):
     print("Processing factors...")
     df_copy = df.copy()
 
     # shift returns back one year
-    df_copy['Momentum'] = df_copy.groupby('Industry')['ForwardReturn'].transform(lambda x: x.shift(1))
+    df_copy['Momentum'] = df_copy.groupby(
+        'Industry')['ForwardReturn'].transform(lambda x: x.shift(1))
     df_copy['Size'] = df_copy['MarketCap']
     df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']
     df_copy['Profitability'] = df_copy['ROE']
     df_copy['Investment'] = df_copy['FreeCashFlow'] / df_copy['MarketCap']
 
     # Normalize within each industry
-    df_copy['MomentumNorm'] = df_copy.groupby('Industry')['Momentum'].transform(normalize)
-    df_copy['SizeNorm'] = df_copy.groupby('Industry')['Size'].transform(normalize)
-    df_copy['ValueNorm'] = df_copy.groupby('Industry')['Value'].transform(normalize)
-    df_copy['ProfitabilityNorm'] = df_copy.groupby('Industry')['Profitability'].transform(normalize)
-    df_copy['InvestmentNorm'] = df_copy.groupby('Industry')['Investment'].transform(normalize)
+    df_copy['MomentumNorm'] = df_copy.groupby(
+        'Industry')['Momentum'].transform(normalize)
+    df_copy['SizeNorm'] = df_copy.groupby(
+        'Industry')['Size'].transform(normalize)
+    df_copy['ValueNorm'] = df_copy.groupby(
+        'Industry')['Value'].transform(normalize)
+    df_copy['ProfitabilityNorm'] = df_copy.groupby(
+        'Industry')['Profitability'].transform(normalize)
+    df_copy['InvestmentNorm'] = df_copy.groupby(
+        'Industry')['Investment'].transform(normalize)
 
-    df_copy['Score'] = df_copy[['MomentumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)
+    df_copy['Score'] = df_copy[['MomentumNorm', 'SizeNorm',
+                                'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)
 
     return df_copy
+
 
 def train_model(x_train, y_train, params=None):
     best_params = params
@@ -88,11 +99,14 @@ def test_model(rf, x_test, y_test):
     r2 = r2_score(y_test, y_pred)
     return y_pred, mse, r2
 
+
 class NaiveModel:
     def fit(self, X, y):
         self.mean = y.mean()
+
     def predict(self, X):
         return np.full((len(X), ), self.mean)
+
 
 csv_file = 'data.csv'
 
@@ -122,7 +136,8 @@ print(df_grouped[['Momentum', 'ForwardReturn', 'Size',
       'Value', 'Profitability', 'Investment']].isnull().sum())
 df_grouped.reset_index(inplace=True, drop=True)
 
-features = ['MomentumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']
+features = ['MomentumNorm', 'SizeNorm', 'ValueNorm',
+            'ProfitabilityNorm', 'InvestmentNorm']
 #features = ['SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']
 target = 'ForwardReturnNorm'
 
@@ -196,10 +211,10 @@ plt.title('Predicted vs. Actual Returns')
 plt.savefig('predicted_vs_actual.png')
 
 # remove later
-#exit()
+# exit()
 
 # Bootstrap analysis
-n_samples = 100 #1000
+n_samples = 100  # 1000
 
 residuals = []
 feature_importances = []
@@ -268,12 +283,18 @@ r2_lower = np.percentile(r2_vals, ((1 - confidence_level) / 2) * 100)
 r2_upper = np.percentile(
     r2_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
 
-naive_residuals_lower = np.percentile(naive_residuals, ((1 - confidence_level) / 2) * 100)
-naive_residuals_upper = np.percentile(naive_residuals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
-naive_mse_lower = np.percentile(naive_mse_vals, ((1 - confidence_level) / 2) * 100)
-naive_mse_upper = np.percentile(naive_mse_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
-naive_r2_lower = np.percentile(naive_r2_vals, ((1 - confidence_level) / 2) * 100)
-naive_r2_upper = np.percentile(naive_r2_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+naive_residuals_lower = np.percentile(
+    naive_residuals, ((1 - confidence_level) / 2) * 100)
+naive_residuals_upper = np.percentile(
+    naive_residuals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+naive_mse_lower = np.percentile(
+    naive_mse_vals, ((1 - confidence_level) / 2) * 100)
+naive_mse_upper = np.percentile(
+    naive_mse_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+naive_r2_lower = np.percentile(
+    naive_r2_vals, ((1 - confidence_level) / 2) * 100)
+naive_r2_upper = np.percentile(
+    naive_r2_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
 
 print(f"{confidence_level*100}% confidence interval for naive model residuals: ({naive_residuals_lower}, {naive_residuals_upper})")
 print(f"{confidence_level*100}% confidence interval for naive model MSE: ({naive_mse_lower}, {naive_mse_upper})")
