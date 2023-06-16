@@ -42,15 +42,15 @@ def process_factors(df):
 
     # Normalize within each industry
     df_copy['MomentumNorm'] = df_copy.groupby(
-        ['IndustrySector', 'Year'])['Momentum'].transform(normalize)
+        ['Year'])['Momentum'].transform(normalize)
     df_copy['SizeNorm'] = df_copy.groupby(
-        ['IndustrySector', 'Year'])['Size'].transform(normalize)
+        ['Year'])['Size'].transform(normalize)
     df_copy['ValueNorm'] = df_copy.groupby(
-        ['IndustrySector', 'Year'])['Value'].transform(normalize)
+        ['Year'])['Value'].transform(normalize)
     df_copy['ProfitabilityNorm'] = df_copy.groupby(
-        ['IndustrySector', 'Year'])['Profitability'].transform(normalize)
+        ['Year'])['Profitability'].transform(normalize)
     df_copy['InvestmentNorm'] = df_copy.groupby(
-        ['IndustrySector', 'Year'])['Investment'].transform(normalize)
+        ['Year'])['Investment'].transform(normalize)
 
     df_copy['Score'] = df_copy[['MomentumNorm', 'SizeNorm',
                                 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)
