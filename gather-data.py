@@ -53,9 +53,6 @@ def event_loop(session, timeout=7000):
             break
     return event
 
-# TODO: separate the code for making a request.
-
-
 def fetch_field_data(field_data, field_name):
     """
     Fetches the data for a specific field from the field data.

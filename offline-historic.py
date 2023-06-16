@@ -19,37 +19,33 @@ def normalize(x):
         return (x - x.mean()) / x.std()
 
 # Cap and floor outliers
-
-
 def cap_and_floor(df, column, lower_percentile, upper_percentile):
     lower, upper = df[column].quantile([lower_percentile, upper_percentile])
     df[column] = np.where(df[column] < lower, lower, df[column])
     df[column] = np.where(df[column] > upper, upper, df[column])
     return df
 
-
 def process_factors(df):
     print("Processing factors...")
     df_copy = df.copy()
-    # Will add risk free rate when I get that working
+
     # shift returns back one year
-    df_copy['Momentum'] = df_copy['ForwardReturn'].shift(1)
+    df_copy['Momentum'] = df_copy.groupby('Industry')['ForwardReturn'].transform(lambda x: x.shift(1))
     df_copy['Size'] = df_copy['MarketCap']
     df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']
     df_copy['Profitability'] = df_copy['ROE']
     df_copy['Investment'] = df_copy['FreeCashFlow'] / df_copy['MarketCap']
 
-    df_copy['MomentumNorm'] = normalize(df_copy['Momentum'])
-    df_copy['SizeNorm'] = normalize(df_copy['Size'])
-    df_copy['ValueNorm'] = normalize(df_copy['Value'])
-    df_copy['ProfitabilityNorm'] = normalize(df_copy['Profitability'])
-    df_copy['InvestmentNorm'] = normalize(df_copy['Investment'])
+    # Normalize within each industry
+    df_copy['MomentumNorm'] = df_copy.groupby('Industry')['Momentum'].transform(normalize)
+    df_copy['SizeNorm'] = df_copy.groupby('Industry')['Size'].transform(normalize)
+    df_copy['ValueNorm'] = df_copy.groupby('Industry')['Value'].transform(normalize)
+    df_copy['ProfitabilityNorm'] = df_copy.groupby('Industry')['Profitability'].transform(normalize)
+    df_copy['InvestmentNorm'] = df_copy.groupby('Industry')['Investment'].transform(normalize)
 
-    df_copy['Score'] = df_copy[['MomentumNorm', 'SizeNorm',
-                                'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)
+    df_copy['Score'] = df_copy[['MomentumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)
 
     return df_copy
-
 
 def train_model(x_train, y_train, params=None):
     best_params = params
