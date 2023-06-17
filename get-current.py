@@ -156,6 +156,7 @@ def get_current_data(tickers):
 
     data_rows = []
     for ticker in tickers:
+        print(ticker)
         request = ref_data_service.createRequest("ReferenceDataRequest")
         request.append("securities", ticker)
         for field in fields:
@@ -166,32 +167,35 @@ def get_current_data(tickers):
 
         for msg in event:
             if msg.hasElement('securityData'):
-                security_data = msg.getElement('securityData')
-            else:
-                continue
+                securityDataArray = msg.getElement('securityData')
+                for securityData in securityDataArray.values():
+                    if securityData.hasElement('fieldExceptions'):
+                        field_exceptions = securityData.getElement('fieldExceptions')
+                        if field_exceptions.numValues() > 0:
+                            continue
+                    
+                    field_data = securityData.getElement('fieldData')
+                    last_price = fetch_field_data(field_data, 'PX_LAST')
+                    previous_year_price = get_previous_year_data(ticker, current_year)
+                    market_cap = fetch_field_data(field_data, 'CUR_MKT_CAP')
+                    book_value_per_share = fetch_field_data(field_data, 'BOOK_VAL_PER_SH')
+                    roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
+                    free_cash_flow = fetch_field_data(field_data, 'CF_FREE_CASH_FLOW')
+                    industry_sector = get_industry_sector(ticker)
 
-            field_exceptions = security_data.getElement('fieldExceptions')
-            if field_exceptions.numValues() > 0:
-                continue
+                    yearly_return = ((last_price - previous_year_price) / previous_year_price) if previous_year_price else np.nan
 
-            field_data = security_data.getElement('fieldData')
-            last_price = fetch_field_data(field_data, 'PX_LAST')
-            market_cap = fetch_field_data(field_data, 'CUR_MKT_CAP')
-            book_value_per_share = fetch_field_data(
-                field_data, 'BOOK_VAL_PER_SH')
-            roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
-            free_cash_flow = fetch_field_data(field_data, 'CF_FREE_CASH_FLOW')
-            industry_sector = get_industry_sector(ticker)
-
-            data_rows.append({
-                'Ticker': ticker,
-                'LastPrice': last_price,
-                'MarketCap': market_cap,
-                'BookValuePerShare': book_value_per_share,
-                'ROE': roe,
-                'FreeCashFlow': free_cash_flow,
-                'IndustrySector': industry_sector,
-            })
+                    data_rows.append({
+                        'Ticker': ticker,
+                        'LastPrice': last_price,
+                        'PreviousYearPrice': previous_year_price,
+                        'YearlyReturn': yearly_return,
+                        'MarketCap': market_cap,
+                        'BookValuePerShare': book_value_per_share,
+                        'ROE': roe,
+                        'FreeCashFlow': free_cash_flow,
+                        'IndustrySector': industry_sector,
+                    })
 
     df = pd.DataFrame(data_rows)
 
