@@ -15,19 +15,19 @@ def normalize(x):
 
 def process_factors(df):
     df_copy = df.copy()
+    df_copy['Momentum'] = df_copy['LastPrice'] / \
+        df_copy['PreviousYearPrice'] - 1
     df_copy['Size'] = df_copy['MarketCap']
     df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']
     df_copy['Profitability'] = df_copy['ROE']
     df_copy['Investment'] = df_copy['FreeCashFlow'] / df_copy['MarketCap']
-    df_copy['SizeNorm'] = df_copy.groupby(
-        'Industry')['Size'].transform(normalize)
-    df_copy['ValueNorm'] = df_copy.groupby(
-        'Industry')['Value'].transform(normalize)
-    df_copy['ProfitabilityNorm'] = df_copy.groupby(
-        'Industry')['Profitability'].transform(normalize)
-    df_copy['InvestmentNorm'] = df_copy.groupby(
-        'Industry')['Investment'].transform(normalize)
+    df_copy['MomentumNorm'] = normalize(df_copy['Momentum'])
+    df_copy['SizeNorm'] = normalize(df_copy['Size'])
+    df_copy['ValueNorm'] = normalize(df_copy['Value'])
+    df_copy['ProfitabilityNorm'] = normalize(df_copy['Profitability'])
+    df_copy['InvestmentNorm'] = normalize(df_copy['Investment'])
     return df_copy
+
 
 
 csv_file = 'current_data.csv'
@@ -50,7 +50,7 @@ df = pd.read_csv(csv_file)
 df = process_factors(df)
 
 # Define features
-features = ['SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']
+features = ['MomentumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']
 
 # Check if any features are missing
 missing_features = [
@@ -65,7 +65,7 @@ with open(model_file, 'rb') as file:
 
 # Make predictions
 df['Score'] = model.predict(df[features])
-
+df = df.sort_values('Score', ascending=False)
 # Save the data with the predictions
 df.to_csv('scored_data.csv', index=False)
 

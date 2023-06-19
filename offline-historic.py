@@ -99,6 +99,13 @@ def test_model(rf, x_test, y_test):
     r2 = r2_score(y_test, y_pred)
     return y_pred, mse, r2
 
+class LinearModel:
+    def fit(self, X, y):
+        y = y.flatten()
+        self.coef = np.linalg.inv(X.T @ X) @ X.T @ y
+
+    def predict(self, X):
+        return X @ self.coef
 
 class NaiveModel:
     def fit(self, X, y):
@@ -106,7 +113,6 @@ class NaiveModel:
 
     def predict(self, X):
         return np.full((len(X), ), self.mean)
-
 
 csv_file = 'data.csv'
 
@@ -161,6 +167,14 @@ with open('model.pkl', 'wb') as file:
 
 print("MSE: ", mse)
 print("R2: ", r2)
+
+linear_model = LinearModel()
+linear_model.fit(x_train.values, y_train.values)
+y_pred_linear = linear_model.predict(x_test)
+mse_linear = mean_squared_error(y_test, y_pred_linear)
+r2_linear = r2_score(y_test, y_pred_linear)
+print("Linear MSE: ", mse_linear)
+print("Linear R2: ", r2_linear)
 
 naive_model = NaiveModel()
 naive_model.fit(x_train, y_train)
@@ -222,6 +236,11 @@ feature_importances = []
 mse_vals = []
 r2_vals = []
 
+# Linear model
+linear_residuals = []
+linear_mse_vals = []
+linear_r2_vals = []
+
 # Naive model
 naive_residuals = []
 naive_mse_vals = []
@@ -245,6 +264,10 @@ for _ in range(n_samples):
     rf, _ = train_model(x_sample, y_sample, best_params)
     y_pred, mse, r2 = test_model(rf, x_test, y_test)
 
+    linear = LinearModel()
+    linear.fit(x_sample.values, y_sample.values)
+    y_pred_linear = linear.predict(x_test)
+
     naive = NaiveModel()
     naive.fit(x_sample, y_sample)
     y_pred_naive = naive.predict(x_test)
@@ -254,6 +277,15 @@ for _ in range(n_samples):
     residuals.append(y_test - y_pred)
     mse_vals.append(mse)
     r2_vals.append(r2)
+
+    # Linear model results
+    linear_residuals.append(y_test - y_pred_linear)
+    linear_mse = mean_squared_error(y_test, y_pred_linear)
+    linear_r2 = r2_score(y_test, y_pred_linear)
+    linear_mse_vals.append(linear_mse)
+    linear_r2_vals.append(linear_r2)
+
+
     # Naive model results
     naive_residuals.append(y_test - y_pred_naive)
     naive_mse = mean_squared_error(y_test, y_pred_naive)
@@ -284,6 +316,19 @@ r2_lower = np.percentile(r2_vals, ((1 - confidence_level) / 2) * 100)
 r2_upper = np.percentile(
     r2_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
 
+linear_residuals_lower = np.percentile(
+    linear_residuals, ((1 - confidence_level) / 2) * 100)
+linear_residuals_upper = np.percentile(
+    linear_residuals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+linear_mse_lower = np.percentile(
+    linear_mse_vals, ((1 - confidence_level) / 2) * 100)
+linear_mse_upper = np.percentile(
+    linear_mse_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+linear_r2_lower = np.percentile(
+    linear_r2_vals, ((1 - confidence_level) / 2) * 100)
+linear_r2_upper = np.percentile(
+    linear_r2_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+
 naive_residuals_lower = np.percentile(
     naive_residuals, ((1 - confidence_level) / 2) * 100)
 naive_residuals_upper = np.percentile(
@@ -300,6 +345,10 @@ naive_r2_upper = np.percentile(
 print(f"{confidence_level*100}% confidence interval for naive model residuals: ({naive_residuals_lower}, {naive_residuals_upper})")
 print(f"{confidence_level*100}% confidence interval for naive model MSE: ({naive_mse_lower}, {naive_mse_upper})")
 print(f"{confidence_level*100}% confidence interval for naive model R^2: ({naive_r2_lower}, {naive_r2_upper})")
+
+print(f"{confidence_level*100}% confidence interval for linear model residuals: ({linear_residuals_lower}, {linear_residuals_upper})")
+print(f"{confidence_level*100}% confidence interval for linear model MSE: ({linear_mse_lower}, {linear_mse_upper})")
+print(f"{confidence_level*100}% confidence interval for linear model R^2: ({linear_r2_lower}, {linear_r2_upper})")
 
 for i, (lower, upper) in enumerate(feature_confidence_intervals):
     print(f"{confidence_level*100}% confidence interval for feature {i}'s importance: ({lower}, {upper})")
