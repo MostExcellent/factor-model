@@ -203,6 +203,15 @@ r2_naive = r2_score(y_test, y_pred_naive)
 print("Naive MSE: ", mse_naive)
 print("Naive R2: ", r2_naive)
 
+with open('initial_test_results.txt', 'w') as file:
+    file.write(f"MSE: {mse}\n")
+    file.write(f"R2: {r2}\n")
+    file.write(f"Linear MSE: {mse_linear}\n")
+    file.write(f"Linear R2: {r2_linear}\n")
+    file.write(f"Naive MSE: {mse_naive}\n")
+    file.write(f"Naive R2: {r2_naive}\n")
+    file.close()
+
 # Generate plots
 
 # Feature importance plot
@@ -380,3 +389,16 @@ for i, (lower, upper) in enumerate(feature_confidence_intervals):
 print(f"{confidence_level*100}% confidence interval for residuals: ({residuals_lower}, {residuals_upper})")
 print(f"{confidence_level*100}% confidence interval for MSE: ({mse_lower}, {mse_upper})")
 print(f"{confidence_level*100}% confidence interval for R^2: ({r2_lower}, {r2_upper})")
+
+with open('bootstrap_test_results.txt', 'w') as file:
+    file.write(f"Feature confidence intervals: {feature_confidence_intervals}\n")
+    file.write(f"Residuals confidence interval: ({residuals_lower}, {residuals_upper})\n")
+    file.write(f"MSE confidence interval: ({mse_lower}, {mse_upper})\n")
+    file.write(f"R2 confidence interval: ({r2_lower}, {r2_upper})\n")
+    file.write(f"Linear residuals confidence interval: ({linear_residuals_lower}, {linear_residuals_upper})\n")
+    file.write(f"Linear MSE confidence interval: ({linear_mse_lower}, {linear_mse_upper})\n")
+    file.write(f"Linear R2 confidence interval: ({linear_r2_lower}, {linear_r2_upper})\n")
+    file.write(f"Naive residuals confidence interval: ({naive_residuals_lower}, {naive_residuals_upper})\n")
+    file.write(f"Naive MSE confidence interval: ({naive_mse_lower}, {naive_mse_upper})\n")
+    file.write(f"Naive R2 confidence interval: ({naive_r2_lower}, {naive_r2_upper})\n")
+    file.close()
