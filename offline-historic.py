@@ -34,8 +34,8 @@ def process_factors(df):
 
     # shift returns back one year
     df_copy['Momentum'] = df_copy.groupby(
-         'Ticker')['ForwardReturn'].transform(lambda x: x.shift(1))
-    #df_copy['Momentum'] = df_copy.groupby(
+        'Ticker')['ForwardReturn'].transform(lambda x: x.shift(1))
+    # df_copy['Momentum'] = df_copy.groupby(
     #    'Ticker')['LogReturn'].transform(lambda x: x.shift(1))
     df_copy['Size'] = df_copy['MarketCap']
     df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']
@@ -148,11 +148,11 @@ else:
 df = df.sort_values(by=['Ticker', 'Year'])
 df['ForwardReturn'] = df.groupby('Ticker')['LastPrice'].pct_change(-1)
 df['ForwardReturnNorm'] = df.groupby(
-     'Year')['ForwardReturn'].transform(normalize)
+    'Year')['ForwardReturn'].transform(normalize)
 
 # Log returns
 df = df.sort_values(by=['Ticker', 'Year'])
-#df['LogReturn'] = np.log(df.groupby(
+# df['LogReturn'] = np.log(df.groupby(
 #    'Ticker')['LastPrice'].shift(-1) / df['LastPrice'])
 df['LogReturn'] = np.log(df['ForwardReturn'] + 1)
 df.dropna(subset=['LogReturn', 'ForwardReturn'], inplace=True)
