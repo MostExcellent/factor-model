@@ -34,7 +34,9 @@ def process_factors(df):
 
     # shift returns back one year
     df_copy['Momentum'] = df_copy.groupby(
-        'Ticker')['ForwardReturn'].transform(lambda x: x.shift(1))
+         'Ticker')['ForwardReturn'].transform(lambda x: x.shift(1))
+    #df_copy['Momentum'] = df_copy.groupby(
+    #    'Ticker')['LogReturn'].transform(lambda x: x.shift(1))
     df_copy['Size'] = df_copy['MarketCap']
     df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']
     df_copy['Profitability'] = df_copy['ROE']
@@ -58,6 +60,24 @@ def process_factors(df):
     return df_copy
 
 
+def optimize_params(x_train, y_train, estimator=RandomForestRegressor(), method=GridSearchCV, param_grid=None):
+    if param_grid == None:
+        param_grid = {
+            'n_estimators': [10, 50, 100, 200],
+            'max_depth': [None, 10, 20, 30],
+            'min_samples_split': [2, 5, 10],
+            'min_samples_leaf': [1, 2, 4],
+            'max_features': ['auto', 'sqrt']
+        }
+    optimizer = method(estimator=RandomForestRegressor(),
+                       param_grid=param_grid, cv=3, n_jobs=-1, verbose=2)
+    print("Tuning hyperparameters...")
+    optimizer.fit(x_train, y_train)
+    best_params = optimizer.best_params_
+    print(f"Best parameters: {best_params}")
+    return best_params
+
+
 def train_model(x_train, y_train, params=None):
     best_params = params
     if best_params is None:
@@ -73,17 +93,8 @@ def train_model(x_train, y_train, params=None):
 
         rf = RandomForestRegressor()
 
-        # Instantiate the grid search model
-        grid_search = GridSearchCV(
-            estimator=rf, param_grid=param_grid, cv=3, n_jobs=-1, verbose=2)
-
-        # Fit the grid search to the data
-        print("Tuning hyperparameters...")
-        grid_search.fit(x_train, y_train)
-
-        # Check the best parameters
-        best_params = grid_search.best_params_
-        print(f"Best parameters: {best_params}")
+        best_params = optimize_params(
+            x_train, y_train, rf, GridSearchCV, param_grid)
 
     print("Training model...")
     best_model = RandomForestRegressor(**best_params)
@@ -99,6 +110,7 @@ def test_model(rf, x_test, y_test):
     r2 = r2_score(y_test, y_pred)
     return y_pred, mse, r2
 
+
 class LinearModel:
     def fit(self, X, y):
         y = y.flatten()
@@ -107,12 +119,14 @@ class LinearModel:
     def predict(self, X):
         return X @ self.coef
 
+
 class NaiveModel:
     def fit(self, X, y):
         self.mean = y.mean()
 
     def predict(self, X):
         return np.full((len(X), ), self.mean)
+
 
 csv_file = 'data.csv'
 
@@ -133,9 +147,16 @@ else:
 
 df = df.sort_values(by=['Ticker', 'Year'])
 df['ForwardReturn'] = df.groupby('Ticker')['LastPrice'].pct_change(-1)
-df.dropna(subset=['ForwardReturn'], inplace=True)
 df['ForwardReturnNorm'] = df.groupby(
-    'Year')['ForwardReturn'].transform(normalize)
+     'Year')['ForwardReturn'].transform(normalize)
+
+# Log returns
+df = df.sort_values(by=['Ticker', 'Year'])
+#df['LogReturn'] = np.log(df.groupby(
+#    'Ticker')['LastPrice'].shift(-1) / df['LastPrice'])
+df['LogReturn'] = np.log(df['ForwardReturn'] + 1)
+df.dropna(subset=['LogReturn', 'ForwardReturn'], inplace=True)
+df['LogReturnNorm'] = df.groupby('Year')['LogReturn'].transform(normalize)
 
 #df_grouped = df.groupby(['Ticker', 'Year']).apply(process_factors)
 df_grouped = process_factors(df)
@@ -146,7 +167,8 @@ df_grouped.reset_index(inplace=True, drop=True)
 features = ['MomentumNorm', 'SizeNorm', 'ValueNorm',
             'ProfitabilityNorm', 'InvestmentNorm']
 #features = ['SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']
-target = 'ForwardReturnNorm'
+target = 'LogReturnNorm'
+#target = 'LogReturn'
 
 print(df_grouped)
 df_grouped = df_grouped.dropna()  # Drop rows with NaN values
@@ -198,6 +220,12 @@ plt.figure(figsize=(10, 6))
 sns.histplot(residuals, bins='auto', kde=True)
 plt.title('Residuals Distribution')
 plt.savefig('residuals.png')
+
+# Plot residuals as a function of predicted returns
+plt.figure(figsize=(10, 6))
+plt.scatter(y_pred, residuals)
+plt.title('Residuals vs. Predicted Returns')
+plt.savefig('residuals_vs_predicted_returns.png')
 
 # Distribution of each factor
 # for factor in features:
@@ -284,7 +312,6 @@ for _ in range(n_samples):
     linear_r2 = r2_score(y_test, y_pred_linear)
     linear_mse_vals.append(linear_mse)
     linear_r2_vals.append(linear_r2)
-
 
     # Naive model results
     naive_residuals.append(y_test - y_pred_naive)
