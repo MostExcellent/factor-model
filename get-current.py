@@ -28,7 +28,7 @@ if not session.openService("//blp/refdata"):
 
 ref_data_service = session.getService("//blp/refdata")
 
-fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
+FIELDS = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
           'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']  # Bloomberg fields
 
 data = []
@@ -152,7 +152,7 @@ def get_current_data(tickers):
     Gets current data for the given tickers.
     """
     fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
-              'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW', 'INDUSTRY_SECTOR']
+              'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW', 'BEST_EPS', 'BEST_PE_RATIO', 'BEST_ROE', 'INDUSTRY_SECTOR']
 
     data_rows = []
     for ticker in tickers:
@@ -181,6 +181,9 @@ def get_current_data(tickers):
                     book_value_per_share = fetch_field_data(field_data, 'BOOK_VAL_PER_SH')
                     roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
                     free_cash_flow = fetch_field_data(field_data, 'CF_FREE_CASH_FLOW')
+                    best_eps = fetch_field_data(field_data, 'BEST_EPS')  # Fetch BEST_EPS data
+                    best_pe_ratio = fetch_field_data(field_data, 'BEST_PE_RATIO')  # Fetch BEST_PE_RATIO data
+                    best_roe = fetch_field_data(field_data, 'BEST_ROE')  # Fetch BEST_ROE data
                     industry_sector = get_industry_sector(ticker)
 
                     yearly_return = ((last_price - previous_year_price) / previous_year_price) if previous_year_price else np.nan
@@ -194,17 +197,16 @@ def get_current_data(tickers):
                         'BookValuePerShare': book_value_per_share,
                         'ROE': roe,
                         'FreeCashFlow': free_cash_flow,
+                        'ForwardEPS': best_eps,
+                        'ForwardPE': best_pe_ratio,
+                        'ForwardROE': best_roe,
                         'IndustrySector': industry_sector,
                     })
 
     df = pd.DataFrame(data_rows)
 
     # Handle missing values by interpolation, then drop remaining NaNs
-    df = df.groupby('Ticker').apply(
-        lambda group: group.interpolate(method='linear'))
-    df.dropna(inplace=True)
-
-    return df
+    df = df
 
 to_get = tickers + get_index_members(INDEX)
 

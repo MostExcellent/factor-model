@@ -34,7 +34,8 @@ if not session.openService("//blp/refdata"):
 ref_data_service = session.getService("//blp/refdata")
 
 fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
-          'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']  # Bloomberg fields
+          'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']#, 'BEST_EPS', 'BEST_PE_RATIO', 'BEST_ROE']
+  # Bloomberg fields
 
 years = np.arange(START_YEAR, END_YEAR)  # Sample period
 
@@ -120,6 +121,36 @@ def get_industry_sector(ticker):
 
     return industry_sector
 
+def fetch_projections(ticker, year):
+    """
+    Fetches the data for BEST_EPS and BEST_PE fields from Bloomberg for the given ticker and year.
+    """
+    request = ref_data_service.createRequest("ReferenceDataRequest")
+    request.append("securities", ticker)
+    request.append("fields", "BEST_EPS")
+    request.append("fields", "BEST_PE_RATIO")
+    request.append("fields", "BEST_ROE")
+    overrides = request.getElement('overrides')
+    override1 = overrides.appendElement()
+    override1.setElement('fieldId', 'REFERENCE_DATE')
+    override1.setElement('value', f"{year}0101")
+
+    session.sendRequest(request)
+    event = event_loop(session)
+
+    best_eps = np.nan
+    best_pe = np.nan
+    best_roe = np.nan
+
+    for msg in event:
+        securityDataArray = msg.getElement('securityData')
+        for securityData in securityDataArray.values():
+            fieldData = securityData.getElement('fieldData')
+            best_eps = fetch_field_data(fieldData, 'BEST_EPS')
+            best_pe = fetch_field_data(fieldData, 'BEST_PE_RATIO')
+            best_roe = fetch_field_data(fieldData, 'BEST_ROE')
+
+    return best_eps, best_pe, best_roe
 
 def get_data(fields, years, index=INDEX):
     """
@@ -177,8 +208,8 @@ def get_data(fields, years, index=INDEX):
                         roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
                         free_cash_flow = fetch_field_data(
                             field_data, 'CF_FREE_CASH_FLOW')
-                        industry_sector = get_industry_sector(ticker)
-
+                        #industry_sector = get_industry_sector(ticker)
+                        best_eps, best_pe, best_roe = fetch_projections(ticker, year)
                         data_rows.append({
                             'Year': year,
                             'Ticker': ticker,
@@ -187,9 +218,12 @@ def get_data(fields, years, index=INDEX):
                             'BookValuePerShare': book_value_per_share,
                             'ROE': roe,
                             'FreeCashFlow': free_cash_flow,
-                            'IndustrySector': industry_sector,
+                            #'IndustrySector': industry_sector,
+                            #'ForwardEPS': best_eps,
+                            #'ForwardPE': best_pe,
+                            #'ForwardROE': best_roe,
                         })
-                        print(data_rows)
+                        print(data_rows[-1])
             except Exception as e:
                 print(f"Error for {ticker} in {year}: {e}")
                 # Append a placeholder row with NaNs in case there are issues. (for delisted stocks?)
@@ -201,7 +235,10 @@ def get_data(fields, years, index=INDEX):
                     'BookValuePerShare': np.nan,
                     'ROE': np.nan,
                     'FreeCashFlow': np.nan,
-                    'IndustrySector': np.nan,
+                    #'IndustrySector': np.nan,
+                    #'ForwardEPS': np.nan,
+                    #'ForwardPE': np.nan,
+                    #'ForwardROE': np.nan,
                 })
 
     df = pd.DataFrame(data_rows)
@@ -266,7 +303,8 @@ else:
     df = get_data(fields, years)
     # Save to csv to avoid making API calls again in the future
     df.to_csv(csv_file, index=False)
-
+#remove later if needed
+exit()
 # If risk free rates csv exists, read from it, else fetch from Bloomberg API
 csv_risk_free_rates = 'risk_free_rates.csv'
 

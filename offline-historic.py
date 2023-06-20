@@ -54,9 +54,6 @@ def process_factors(df):
     df_copy['InvestmentNorm'] = df_copy.groupby(
         ['Year'])['Investment'].transform(normalize)
 
-    df_copy['Score'] = df_copy[['MomentumNorm', 'SizeNorm',
-                                'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']].sum(axis=1)
-
     return df_copy
 
 
@@ -166,7 +163,7 @@ df_grouped.reset_index(inplace=True, drop=True)
 
 features = ['MomentumNorm', 'SizeNorm', 'ValueNorm',
             'ProfitabilityNorm', 'InvestmentNorm']
-#features = ['SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']
+#features = ['Momentum', 'Size', 'Value', 'Profitability', 'Investment']
 target = 'LogReturnNorm'
 #target = 'LogReturn'
 
