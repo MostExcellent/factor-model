@@ -1,11 +1,11 @@
-import pandas as pd
-import numpy as np
 import os
 import pickle
-from sklearn.ensemble import RandomForestRegressor
+
+import pandas as pd
 
 
 def normalize(x):
+    """Normalize a pandas Series"""
     x = x.fillna(x.mean())  # Fill NaNs with mean
     if x.std() == 0:
         return x - x.mean()
@@ -14,6 +14,7 @@ def normalize(x):
 
 
 def process_factors(df):
+    """Process the factors"""
     df_copy = df.copy()
     df_copy['Momentum'] = df_copy['LastPrice'] / \
         df_copy['PreviousYearPrice'] - 1
@@ -27,7 +28,6 @@ def process_factors(df):
     df_copy['ProfitabilityNorm'] = normalize(df_copy['Profitability'])
     df_copy['InvestmentNorm'] = normalize(df_copy['Investment'])
     return df_copy
-
 
 
 csv_file = 'current_data.csv'
@@ -50,7 +50,8 @@ df = pd.read_csv(csv_file)
 df = process_factors(df)
 
 # Define features
-features = ['MomentumNorm', 'SizeNorm', 'ValueNorm', 'ProfitabilityNorm', 'InvestmentNorm']
+features = ['MomentumNorm', 'SizeNorm', 'ValueNorm',
+            'ProfitabilityNorm', 'InvestmentNorm']
 
 # Check if any features are missing
 missing_features = [

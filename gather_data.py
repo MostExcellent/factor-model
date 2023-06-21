@@ -1,25 +1,24 @@
 # TODO: try monthly data and test different time periods
 
-# The basics
-import pandas as pd
-import numpy as np
-# sklearn for regression
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, r2_score
-# For plotting
-import matplotlib.pyplot as plt
-import seaborn as sns
-# The Bloomberg API
-import blpapi
 # To load the data from csv
 import os
 # For timeout
 import time
 
+# The Bloomberg API
+import blpapi
+import numpy as np
+# Fun stuff
+import pandas as pd
+from blpapi import Name
+
 START_YEAR = 2010
 END_YEAR = 2021
 INDEX = 'SPX Index'  # S&P 500
+
+# Fields for historical data request
+FIELDS_LIST = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
+               'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']
 
 # Start a Bloomberg session
 session = blpapi.Session()  # Start a Bloomberg session
@@ -33,22 +32,38 @@ if not session.openService("//blp/refdata"):
 
 ref_data_service = session.getService("//blp/refdata")
 
-fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
-          'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']#, 'BEST_EPS', 'BEST_PE_RATIO', 'BEST_ROE']
-  # Bloomberg fields
+# Bloomberg fields
 
-years = np.arange(START_YEAR, END_YEAR)  # Sample period
+YEARS = np.arange(START_YEAR, END_YEAR)  # Sample period
+
+# names for use with blpapi
+
+SECURITIES = Name('securities')
+FIELDS = Name('fields')
+FIELDID = Name('fieldId')
+VALUE = Name('value')
+OVERRIDES = Name('overrides')
+OVERRIDE = Name('override')
+START_DATE = Name('startDate')
+END_DATE = Name('endDate')
+PERIODICITY_SELECTION = Name('periodicitySelection')
+PERIODICITY_ADJUSTMENT = Name('periodicityAdjustment')
+NON_TRADING_DAY_FILL_OPTION = Name('nonTradingDayFillOption')
+NON_TRADING_DAY_FILL_METHOD = Name('nonTradingDayFillMethod')
+FIELD_NAMES = [Name(field) for field in FIELDS_LIST]
 
 
-def event_loop(session, timeout=7000):
+def event_loop(e_session, timeout=7000):
     """
     Creates an event loop that waits for a response from the session.
     """
     event = None
     deadline = time.time() + timeout / 1000  # convert ms to seconds
     while True:
-        event = session.nextEvent(timeout)
-        if event.eventType() in [blpapi.Event.PARTIAL_RESPONSE, blpapi.Event.RESPONSE]:
+        event = e_session.nextEvent(timeout)
+        # type: ignore
+        # type: ignore
+        if event.eventType() in [blpapi.Event.PARTIAL_RESPONSE, blpapi.Event.RESPONSE]: # type: ignore
             break
         if time.time() > deadline:
             break
@@ -70,23 +85,23 @@ def get_index_members(index, year):
     Gets the index members for the given index and year.
     """
     request = ref_data_service.createRequest("ReferenceDataRequest")
-    request.append("securities", index)
-    request.append("fields", "INDX_MEMBERS")
+    request.append(SECURITIES, index)
+    request.append(FIELDS, "INDX_MEMBERS")
 
-    overrides = request.getElement('overrides')
+    overrides = request.getElement(OVERRIDES)
     override1 = overrides.appendElement()
-    override1.setElement('fieldId', 'REFERENCE_DATE')
-    override1.setElement('value', f"{year}1231")
+    override1.setElement(FIELDID, 'REFERENCE_DATE')
+    override1.setElement(VALUE, f"{year}1231")
 
     session.sendRequest(request)
 
     members = []
     event = event_loop(session)
     for msg in event:
-        securityDataArray = msg.getElement('securityData')
-        for securityData in securityDataArray.values():
-            fieldData = securityData.getElement('fieldData')
-            indx_members = fieldData.getElement('INDX_MEMBERS')
+        security_data_array = msg.getElement('securityData')
+        for security_data in security_data_array.values():
+            field_data = security_data.getElement('fieldData')
+            indx_members = field_data.getElement('INDX_MEMBERS')
             for indx_member in indx_members.values():
                 member_string = indx_member.getElementAsString(
                     'Member Ticker and Exchange Code')
@@ -103,37 +118,37 @@ def get_industry_sector(ticker):
     Gets the industry sector for the given ticker.
     """
     request = ref_data_service.createRequest("ReferenceDataRequest")
-    request.append("securities", ticker)
-    request.append("fields", "INDUSTRY_SECTOR")
+    request.append(SECURITIES, ticker)
+    request.append(FIELDS, "INDUSTRY_SECTOR")
 
     session.sendRequest(request)
 
     event = event_loop(session)
+    industry_sector = np.nan
     for msg in event:
-        securityDataArray = msg.getElement('securityData')
-        for securityData in securityDataArray.values():
-            fieldData = securityData.getElement('fieldData')
-            if fieldData.hasElement('INDUSTRY_SECTOR'):
-                industry_sector = fieldData.getElementAsString(
+        security_data_array = msg.getElement('securityData')
+        for security_data in security_data_array.values():
+            field_data = security_data.getElement('fieldData')
+            if field_data.hasElement('INDUSTRY_SECTOR'):
+                industry_sector = field_data.getElementAsString(
                     'INDUSTRY_SECTOR')
-            else:
-                industry_sector = np.nan
 
     return industry_sector
+
 
 def fetch_projections(ticker, year):
     """
     Fetches the data for BEST_EPS and BEST_PE fields from Bloomberg for the given ticker and year.
     """
     request = ref_data_service.createRequest("ReferenceDataRequest")
-    request.append("securities", ticker)
-    request.append("fields", "BEST_EPS")
-    request.append("fields", "BEST_PE_RATIO")
-    request.append("fields", "BEST_ROE")
-    overrides = request.getElement('overrides')
+    request.append(SECURITIES, ticker)
+    request.append(FIELDS, "BEST_EPS")
+    request.append(FIELDS, "BEST_PE_RATIO")
+    request.append(FIELDS, "BEST_ROE")
+    overrides = request.getElement(OVERRIDES)
     override1 = overrides.appendElement()
-    override1.setElement('fieldId', 'REFERENCE_DATE')
-    override1.setElement('value', f"{year}0101")
+    override1.setElement(FIELDID, 'REFERENCE_DATE')
+    override1.setElement(VALUE, f"{year}0101")
 
     session.sendRequest(request)
     event = event_loop(session)
@@ -143,8 +158,8 @@ def fetch_projections(ticker, year):
     best_roe = np.nan
 
     for msg in event:
-        securityDataArray = msg.getElement('securityData')
-        for securityData in securityDataArray.values():
+        security_data_array = msg.getElement('securityData')
+        for securityData in security_data_array.values():
             fieldData = securityData.getElement('fieldData')
             best_eps = fetch_field_data(fieldData, 'BEST_EPS')
             best_pe = fetch_field_data(fieldData, 'BEST_PE_RATIO')
@@ -152,7 +167,8 @@ def fetch_projections(ticker, year):
 
     return best_eps, best_pe, best_roe
 
-def get_data(fields, years, index=INDEX):
+
+def get_data(fields, years=YEARS, index=INDEX):
     """
     Gets data from Bloomberg for the given tickers, fields and years.
     """
@@ -165,16 +181,16 @@ def get_data(fields, years, index=INDEX):
             try:
                 request = ref_data_service.createRequest(
                     "HistoricalDataRequest")
-                request.set("periodicityAdjustment", "ACTUAL")
-                request.set("periodicitySelection", "YEARLY")
-                request.set("startDate", f"{year}0101")
+                request.set(PERIODICITY_ADJUSTMENT, "ACTUAL")
+                request.set(PERIODICITY_SELECTION, "YEARLY")
+                request.set(START_DATE, f"{year}0101")
                 # changed end date to end of the year
-                request.set("endDate", f"{year}1231")
-                request.set("nonTradingDayFillOption", "ALL_CALENDAR_DAYS")
-                request.set("nonTradingDayFillMethod", "PREVIOUS_VALUE")
-                request.append("securities", ticker)
+                request.set(END_DATE, f"{year}1231")
+                request.set(NON_TRADING_DAY_FILL_OPTION, "ALL_CALENDAR_DAYS")
+                request.set(NON_TRADING_DAY_FILL_METHOD, "PREVIOUS_VALUE")
+                request.append(SECURITIES, ticker)
                 for field in fields:
-                    request.append("fields", field)
+                    request.append(FIELDS, field)
 
                 session.sendRequest(request)
 
@@ -209,7 +225,8 @@ def get_data(fields, years, index=INDEX):
                         free_cash_flow = fetch_field_data(
                             field_data, 'CF_FREE_CASH_FLOW')
                         #industry_sector = get_industry_sector(ticker)
-                        best_eps, best_pe, best_roe = fetch_projections(ticker, year)
+                        best_eps, best_pe, best_roe = fetch_projections(
+                            ticker, year)
                         data_rows.append({
                             'Year': year,
                             'Ticker': ticker,
@@ -218,15 +235,15 @@ def get_data(fields, years, index=INDEX):
                             'BookValuePerShare': book_value_per_share,
                             'ROE': roe,
                             'FreeCashFlow': free_cash_flow,
-                            #'IndustrySector': industry_sector,
-                            #'ForwardEPS': best_eps,
-                            #'ForwardPE': best_pe,
-                            #'ForwardROE': best_roe,
+                            # 'IndustrySector': industry_sector,
+                            'ForwardEPS': best_eps,
+                            'ForwardPE': best_pe,
+                            'ForwardROE': best_roe,
                         })
                         print(data_rows[-1])
-            except Exception as e:
-                print(f"Error for {ticker} in {year}: {e}")
-                # Append a placeholder row with NaNs in case there are issues. (for delisted stocks?)
+            except Exception as exception:
+                print(f"Error for {ticker} in {year}: {exception}")
+                # Append a placeholder row with NaNs in case there are issues.
                 data_rows.append({
                     'Year': year,
                     'Ticker': ticker,
@@ -235,88 +252,33 @@ def get_data(fields, years, index=INDEX):
                     'BookValuePerShare': np.nan,
                     'ROE': np.nan,
                     'FreeCashFlow': np.nan,
-                    #'IndustrySector': np.nan,
-                    #'ForwardEPS': np.nan,
-                    #'ForwardPE': np.nan,
-                    #'ForwardROE': np.nan,
+                    'IndustrySector': np.nan,
+                    'ForwardEPS': np.nan,
+                    'ForwardPE': np.nan,
+                    'ForwardROE': np.nan,
                 })
 
-    df = pd.DataFrame(data_rows)
-    print(df)
-
+    fetched_df = pd.DataFrame(data_rows)
+    print(fetched_df.head())
     # Handle missing values by interpolation, then drop remaining NaNs
-    print(df.head())
-    df = df.groupby('Ticker').apply(
+
+    fetched_df = df.groupby('Ticker').apply(
         lambda group: group.interpolate(method='linear'))
-    df.dropna(inplace=True)
+    fetched_df.dropna(inplace=True)
 
     return df
 
 
-def get_risk_free_rate(years=years):
-    """
-    Returns average risk free rate for each year in years as a dictionary
-    """
-    print("Getting risk free rates...")
-    risk_free_rates = {}
-
-    request = ref_data_service.createRequest("HistoricalDataRequest")
-    request.set("securities", "USGG10YR Index")
-    request.set("fields", "PX_LAST")
-    request.set("periodicityAdjustment", "MONTHLY")
-    request.set("periodicitySelection", "MONTHLY")
-    request.set("startDate", f"{years[0]}0101")
-    # Remember, we want the average for the year
-    request.set("endDate", f"{years[-1]}1231")
-    request.set("nonTradingDayFillOption", "ALL_CALENDAR_DAYS")
-    request.set("nonTradingDayFillMethod", "PREVIOUS_VALUE")
-
-    event = event_loop(session)
-
-    for msg in event:
-        security_data = msg.getElement('securityData')
-        field_data = security_data.getElement('fieldData')
-
-        rate_data = []
-        for i in range(field_data.numValues()):
-            data = field_data.getValueAsElement(i)
-            date = data.getElementAsDatetime("date")
-            rate = data.getElementAsFloat("PX_LAST")
-            rate_data.append([date.year(), rate])
-
-        df_rates = pd.DataFrame(rate_data, columns=['Year', 'Rate'])
-        risk_free_rates = df_rates.groupby('Year').mean().to_dict()['Rate']
-
-    return risk_free_rates
-
-
 # Load data from csv if it exists, else fetch from Bloomberg API
-csv_file = 'data.csv'
+CSV_FILE = 'data.csv'
 # Check if the file exists
-if os.path.isfile(csv_file):
+if os.path.isfile(CSV_FILE):
     # Read from the file
     print("Reading data from csv...")
-    df = pd.read_csv(csv_file)
+    df = pd.read_csv(CSV_FILE)
 else:
     print("Fetching data from Bloomberg API...")
     # Fetch data from the Bloomberg API
-    df = get_data(fields, years)
+    df = get_data(FIELDS, YEARS, INDEX)
     # Save to csv to avoid making API calls again in the future
-    df.to_csv(csv_file, index=False)
-#remove later if needed
-exit()
-# If risk free rates csv exists, read from it, else fetch from Bloomberg API
-csv_risk_free_rates = 'risk_free_rates.csv'
-
-try:
-    print("Reading risk free rates from csv...")
-    df_rates = pd.read_csv(csv_risk_free_rates)
-    risk_free_rates = df_rates.set_index('Year')['Rate'].to_dict()
-except FileNotFoundError:
-    print("File not found, fetching risk free rates from Bloomberg API")
-    risk_free_rates = get_risk_free_rate()
-    # Save risk_free_rates into a CSV file
-    pd.DataFrame(list(risk_free_rates.items()), columns=[
-                 'Year', 'Rate']).to_csv(csv_risk_free_rates, index=False)
-
-#df['RiskFreeRate'] = df['Year'].map(risk_free_rates)
+    df.to_csv(CSV_FILE, index=False)

@@ -1,12 +1,13 @@
-import pandas as pd
-import numpy as np
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.metrics import mean_squared_error, r2_score
-import matplotlib.pyplot as plt
-import seaborn as sns
 import os
 import pickle
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.model_selection import GridSearchCV, train_test_split
 
 
 def normalize(x):
@@ -57,7 +58,7 @@ def process_factors(df):
     return df_copy
 
 
-def optimize_params(x_train, y_train, estimator=RandomForestRegressor(), method=GridSearchCV, param_grid=None):
+def optimize_params(x, y, model=RandomForestRegressor(), method=GridSearchCV, param_grid=None):
     if param_grid == None:
         param_grid = {
             'n_estimators': [10, 50, 100, 200],
@@ -66,10 +67,10 @@ def optimize_params(x_train, y_train, estimator=RandomForestRegressor(), method=
             'min_samples_leaf': [1, 2, 4],
             'max_features': ['auto', 'sqrt']
         }
-    optimizer = method(estimator=RandomForestRegressor(),
+    optimizer = method(estimator=model,
                        param_grid=param_grid, cv=3, n_jobs=-1, verbose=2)
     print("Tuning hyperparameters...")
-    optimizer.fit(x_train, y_train)
+    optimizer.fit(x, y)
     best_params = optimizer.best_params_
     print(f"Best parameters: {best_params}")
     return best_params
@@ -109,6 +110,8 @@ def test_model(rf, x_test, y_test):
 
 
 class LinearModel:
+    """Linear regression model"""
+
     def fit(self, X, y):
         y = y.flatten()
         self.coef = np.linalg.inv(X.T @ X) @ X.T @ y
@@ -118,11 +121,13 @@ class LinearModel:
 
 
 class NaiveModel:
-    def fit(self, X, y):
+    """Naive model to simulate random chance"""
+
+    def fit(self, y):
         self.mean = y.mean()
 
-    def predict(self, X):
-        return np.full((len(X), ), self.mean)
+    def predict(self, x):
+        return np.full((len(x), ), self.mean)
 
 
 csv_file = 'data.csv'
@@ -196,7 +201,7 @@ print("Linear MSE: ", mse_linear)
 print("Linear R2: ", r2_linear)
 
 naive_model = NaiveModel()
-naive_model.fit(x_train, y_train)
+naive_model.fit(y_train)
 y_pred_naive = naive_model.predict(x_test)
 mse_naive = mean_squared_error(y_test, y_pred_naive)
 r2_naive = r2_score(y_test, y_pred_naive)
@@ -303,7 +308,7 @@ for _ in range(n_samples):
     y_pred_linear = linear.predict(x_test)
 
     naive = NaiveModel()
-    naive.fit(x_sample, y_sample)
+    naive.fit(y_sample)
     y_pred_naive = naive.predict(x_test)
 
     # Record the results
@@ -391,14 +396,22 @@ print(f"{confidence_level*100}% confidence interval for MSE: ({mse_lower}, {mse_
 print(f"{confidence_level*100}% confidence interval for R^2: ({r2_lower}, {r2_upper})")
 
 with open('bootstrap_test_results.txt', 'w') as file:
-    file.write(f"Feature confidence intervals: {feature_confidence_intervals}\n")
-    file.write(f"Residuals confidence interval: ({residuals_lower}, {residuals_upper})\n")
+    file.write(
+        f"Feature confidence intervals: {feature_confidence_intervals}\n")
+    file.write(
+        f"Residuals confidence interval: ({residuals_lower}, {residuals_upper})\n")
     file.write(f"MSE confidence interval: ({mse_lower}, {mse_upper})\n")
     file.write(f"R2 confidence interval: ({r2_lower}, {r2_upper})\n")
-    file.write(f"Linear residuals confidence interval: ({linear_residuals_lower}, {linear_residuals_upper})\n")
-    file.write(f"Linear MSE confidence interval: ({linear_mse_lower}, {linear_mse_upper})\n")
-    file.write(f"Linear R2 confidence interval: ({linear_r2_lower}, {linear_r2_upper})\n")
-    file.write(f"Naive residuals confidence interval: ({naive_residuals_lower}, {naive_residuals_upper})\n")
-    file.write(f"Naive MSE confidence interval: ({naive_mse_lower}, {naive_mse_upper})\n")
-    file.write(f"Naive R2 confidence interval: ({naive_r2_lower}, {naive_r2_upper})\n")
+    file.write(
+        f"Linear residuals confidence interval: ({linear_residuals_lower}, {linear_residuals_upper})\n")
+    file.write(
+        f"Linear MSE confidence interval: ({linear_mse_lower}, {linear_mse_upper})\n")
+    file.write(
+        f"Linear R2 confidence interval: ({linear_r2_lower}, {linear_r2_upper})\n")
+    file.write(
+        f"Naive residuals confidence interval: ({naive_residuals_lower}, {naive_residuals_upper})\n")
+    file.write(
+        f"Naive MSE confidence interval: ({naive_mse_lower}, {naive_mse_upper})\n")
+    file.write(
+        f"Naive R2 confidence interval: ({naive_r2_lower}, {naive_r2_upper})\n")
     file.close()
