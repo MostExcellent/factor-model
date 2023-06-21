@@ -76,8 +76,9 @@ def optimize_params(x, y, model=RandomForestRegressor(), method=GridSearchCV, pa
     return best_params
 
 
-def train_model(x_train, y_train, params=None):
+def train_model(x_train, y_train, num_models=5, params=None):
     best_params = params
+    models = []
     if best_params is None:
         # Hyperparameter tuning
         # Define the parameter grid
@@ -94,19 +95,27 @@ def train_model(x_train, y_train, params=None):
         best_params = optimize_params(
             x_train, y_train, rf, GridSearchCV, param_grid)
 
-    print("Training model...")
-    best_model = RandomForestRegressor(**best_params)
-    best_model.fit(x_train, y_train)
+    print("Training models...")
+    for _ in range(num_models):
+        model = RandomForestRegressor(**best_params)
+        model.fit(x_train, y_train)
+        models.append(model)
 
-    return best_model, best_params
+    return models, best_params
 
 
-def test_model(rf, x_test, y_test):
+def test_model(models, x_test, y_test):
     print("Testing model...")
-    y_pred = rf.predict(x_test)
-    mse = mean_squared_error(y_test, y_pred)
-    r2 = r2_score(y_test, y_pred)
-    return y_pred, mse, r2
+    predictions = []
+    for model in models:
+        y_pred = model.predict(x_test)
+        predictions.append(y_pred)
+    
+    # Average predictions
+    y_pred_avg = np.mean(predictions, axis=0)
+    mse = mean_squared_error(y_test, y_pred_avg)
+    r2 = r2_score(y_test, y_pred_avg)
+    return y_pred_avg, mse, r2
 
 
 class LinearModel:
@@ -182,11 +191,11 @@ y = df_grouped[target]
 x_train, x_test, y_train, y_test = train_test_split(
     x, y, test_size=0.2, random_state=42)
 
-rf, best_params = train_model(x_train, y_train)
-y_pred, mse, r2 = test_model(rf, x_test, y_test)
+ensemble, best_params = train_model(x_train, y_train)
+y_pred, mse, r2 = test_model(ensemble, x_test, y_test)
 
-with open('model.pkl', 'wb') as file:
-    pickle.dump(rf, file)
+with open('ensemble.pkl', 'wb') as file:
+    pickle.dump(ensemble, file)
     file.close()
 
 print("MSE: ", mse)
@@ -220,8 +229,10 @@ with open('initial_test_results.txt', 'w') as file:
 # Generate plots
 
 # Feature importance plot
+feature_importances = [rf.feature_importances_ for rf in ensemble]
+feature_importances_avg = np.mean(feature_importances, axis=0)
 plt.figure(figsize=(10, 6))
-sns.barplot(x=rf.feature_importances_, y=features)
+sns.barplot(x=feature_importances_avg, y=features)
 plt.title('Feature Importance')
 plt.savefig('feature_importance.png')
 
@@ -300,8 +311,8 @@ for _ in range(n_samples):
     y_sample = sample_df[target]
 
     # Train and test model on the bootstrap sample and the untouched test data
-    rf, _ = train_model(x_sample, y_sample, best_params)
-    y_pred, mse, r2 = test_model(rf, x_test, y_test)
+    ensemble, _ = train_model(x_sample, y_sample, num_models=5, params=best_params)
+    y_pred, mse, r2 = test_model(ensemble, x_test, y_test)
 
     linear = LinearModel()
     linear.fit(x_sample.values, y_sample.values)
@@ -312,7 +323,7 @@ for _ in range(n_samples):
     y_pred_naive = naive.predict(x_test)
 
     # Record the results
-    feature_importances.append(rf.feature_importances_)
+    feature_importances.append(np.mean([model.feature_importances_ for model in ensemble], axis=0))
     residuals.append(y_test - y_pred)
     mse_vals.append(mse)
     r2_vals.append(r2)
