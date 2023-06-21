@@ -1,9 +1,20 @@
 import pandas as pd
 import blpapi  # The Bloomberg API
-from datetime import datetime, timedelta
+from datetime import datetime
 import time
 import numpy as np
 import os
+import argparse
+from dateutil.relativedelta import relativedelta
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--date", help="The date to get the current data from in YYYYMMDD format. Default is current date.")
+args = parser.parse_args()
+
+if args.date:
+    current_date = datetime.strptime(args.date, '%Y%m%d')
+else:
+    current_date = datetime.now()
 
 session = blpapi.Session()  # Start a Bloomberg session
 session.start()
@@ -28,11 +39,10 @@ if not session.openService("//blp/refdata"):
 
 ref_data_service = session.getService("//blp/refdata")
 
-FIELDS = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
-          'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']  # Bloomberg fields
-
 data = []
-current_year = datetime.now().year
+current_year = current_date.year
+previous_year = current_date - relativedelta(years=1)
+previous_year_str = previous_year.strftime("%Y")
 index = "SPX Index"  # S&P 500 Index
 
 
@@ -61,13 +71,17 @@ def fetch_field_data(field_data, field_name):
         return np.nan
 
 
-def get_index_members(index):
+def get_index_members(index, date=current_date):
     """
     Gets the current index members for the given index.
     """
     request = ref_data_service.createRequest("ReferenceDataRequest")
     request.append("securities", index)
     request.append("fields", "INDX_MEMBERS")
+    overrides = request.getElement('overrides')
+    override1 = overrides.appendElement()
+    override1.setElement('fieldId', 'REFERENCE_DATE')
+    override1.setElement('value', date.strftime("%Y%m%d"))
     session.sendRequest(request)
 
     members = []
@@ -87,19 +101,17 @@ def get_index_members(index):
     return members
 
 
-def get_previous_year_data(ticker, year):
+def get_previous_year_data(ticker, date=current_date- relativedelta(years=1)):
     """
     Gets the last year's price for the given ticker and year.
     """
-    request = ref_data_service.createRequest("HistoricalDataRequest")
-    request.set("periodicityAdjustment", "ACTUAL")
-    request.set("periodicitySelection", "YEARLY")
-    request.set("startDate", f"{year-1}0101")
-    request.set("endDate", f"{year-1}1231")
-    request.set("nonTradingDayFillOption", "ALL_CALENDAR_DAYS")
-    request.set("nonTradingDayFillMethod", "PREVIOUS_VALUE")
+    request = ref_data_service.createRequest("ReferenceDataRequest")
     request.append("securities", ticker)
     request.append("fields", "PX_LAST")
+    overrides = request.getElement('overrides')
+    override1 = overrides.appendElement()
+    override1.setElement('fieldId', 'REFERENCE_DATE')
+    override1.setElement('value', date.strftime("%Y%m%d"))
 
     session.sendRequest(request)
 
@@ -147,12 +159,12 @@ def get_industry_sector(ticker):
 
     return industry_sector
 
-def get_current_data(tickers):
+def get_current_data(tickers, date=current_date):
     """
     Gets current data for the given tickers.
     """
     fields = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
-              'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW', 'BEST_EPS', 'BEST_PE_RATIO', 'BEST_ROE', 'INDUSTRY_SECTOR']
+              'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']#, 'BEST_EPS', 'BEST_PE_RATIO', 'BEST_ROE', 'INDUSTRY_SECTOR']
 
     data_rows = []
     for ticker in tickers:
@@ -161,6 +173,11 @@ def get_current_data(tickers):
         request.append("securities", ticker)
         for field in fields:
             request.append("fields", field)
+        overrides = request.getElement('overrides')
+        override1 = overrides.appendElement()
+        override1.setElement('fieldId', 'REFERENCE_DATE')
+        override1.setElement('value', date.strftime("%Y%m%d"))
+
         session.sendRequest(request)
 
         event = event_loop(session)
@@ -176,15 +193,15 @@ def get_current_data(tickers):
                     
                     field_data = securityData.getElement('fieldData')
                     last_price = fetch_field_data(field_data, 'PX_LAST')
-                    previous_year_price = get_previous_year_data(ticker, current_year)
+                    previous_year_price = get_previous_year_data(ticker, date)
                     market_cap = fetch_field_data(field_data, 'CUR_MKT_CAP')
                     book_value_per_share = fetch_field_data(field_data, 'BOOK_VAL_PER_SH')
                     roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
                     free_cash_flow = fetch_field_data(field_data, 'CF_FREE_CASH_FLOW')
-                    best_eps = fetch_field_data(field_data, 'BEST_EPS')  # Fetch BEST_EPS data
-                    best_pe_ratio = fetch_field_data(field_data, 'BEST_PE_RATIO')  # Fetch BEST_PE_RATIO data
-                    best_roe = fetch_field_data(field_data, 'BEST_ROE')  # Fetch BEST_ROE data
-                    industry_sector = get_industry_sector(ticker)
+                    #best_eps = fetch_field_data(field_data, 'BEST_EPS')  # Fetch BEST_EPS data
+                    #best_pe_ratio = fetch_field_data(field_data, 'BEST_PE_RATIO')  # Fetch BEST_PE_RATIO data
+                    #best_roe = fetch_field_data(field_data, 'BEST_ROE')  # Fetch BEST_ROE data
+                    #industry_sector = get_industry_sector(ticker)
 
                     yearly_return = ((last_price - previous_year_price) / previous_year_price) if previous_year_price else np.nan
 
@@ -197,16 +214,14 @@ def get_current_data(tickers):
                         'BookValuePerShare': book_value_per_share,
                         'ROE': roe,
                         'FreeCashFlow': free_cash_flow,
-                        'ForwardEPS': best_eps,
-                        'ForwardPE': best_pe_ratio,
-                        'ForwardROE': best_roe,
-                        'IndustrySector': industry_sector,
+                        #'ForwardEPS': best_eps,
+                        #'ForwardPE': best_pe_ratio,
+                        #'ForwardROE': best_roe,
+                        #'IndustrySector': industry_sector,
                     })
 
     df = pd.DataFrame(data_rows)
-
-    # Handle missing values by interpolation, then drop remaining NaNs
-    df = df
+    return df
 
 to_get = tickers + get_index_members(INDEX)
 
