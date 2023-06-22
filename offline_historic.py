@@ -307,7 +307,7 @@ with open('initial_test_results.txt', 'w') as file:
 # Generate plots
 
 # Feature importance plot
-feature_importances = [rf.feature_importances_ for rf in ensemble]
+feature_importances = model.get_feature_importances()
 feature_importances_avg = np.mean(feature_importances, axis=0)
 plt.figure(figsize=(10, 6))
 sns.barplot(x=feature_importances_avg, y=features)
@@ -382,8 +382,6 @@ x_train, x_test, y_train, y_test = train_test_split(
 train_df = pd.concat([x_train, y_train], axis=1)
 
 # Start the bootstrap analysis
-from factor_model.models import RFEnsemble, LinearModel, NaiveModel
-from sklearn.metrics import mean_squared_error, r2_score
 
 for _ in range(n_samples):
     # Bootstrap sample (with replacement) from the training data only
