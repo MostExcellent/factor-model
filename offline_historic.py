@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import GridSearchCV, train_test_split
 
@@ -58,14 +58,13 @@ def process_factors(df):
     return df_copy
 
 
-def optimize_params(x, y, model=RandomForestRegressor(), method=GridSearchCV, param_grid=None):
+def optimize_params(x, y, model=GradientBoostingRegressor(), method=GridSearchCV, param_grid=None):
     if param_grid == None:
         param_grid = {
             'n_estimators': [10, 50, 100, 200],
             'max_depth': [None, 10, 20, 30],
-            'min_samples_split': [2, 5, 10],
-            'min_samples_leaf': [1, 2, 4],
-            'max_features': ['auto', 'sqrt']
+            'learning_rate': [0.01, 0.1, 1],
+            'loss': ['squared_error', 'absolute_error', 'huber', 'quantile']
         }
     optimizer = method(estimator=model,
                        param_grid=param_grid, cv=3, n_jobs=-1, verbose=2)
@@ -76,46 +75,36 @@ def optimize_params(x, y, model=RandomForestRegressor(), method=GridSearchCV, pa
     return best_params
 
 
-def train_model(x_train, y_train, num_models=5, params=None):
+def train_model(x_train, y_train, params=None):
     best_params = params
-    models = []
     if best_params is None:
         # Hyperparameter tuning
         # Define the parameter grid
         param_grid = {
             'n_estimators': [10, 50, 100, 200],
             'max_depth': [None, 10, 20, 30],
-            'min_samples_split': [2, 5, 10],
-            'min_samples_leaf': [1, 2, 4],
-            'max_features': ['auto', 'sqrt']
+            'learning_rate': [0.01, 0.1, 1],
+            'loss': ['squared_error', 'absolute_error', 'huber', 'quantile']
         }
 
-        rf = RandomForestRegressor()
+        gb = GradientBoostingRegressor()
 
         best_params = optimize_params(
-            x_train, y_train, rf, GridSearchCV, param_grid)
+            x_train, y_train, gb, GridSearchCV, param_grid)
 
-    print("Training models...")
-    for _ in range(num_models):
-        model = RandomForestRegressor(**best_params)
-        model.fit(x_train, y_train)
-        models.append(model)
+    print("Training model...")
+    model = GradientBoostingRegressor(**best_params)
+    model.fit(x_train, y_train)
 
-    return models, best_params
+    return model, best_params
 
 
-def test_model(models, x_test, y_test):
+def test_model(model, x_test, y_test):
     print("Testing model...")
-    predictions = []
-    for model in models:
-        y_pred = model.predict(x_test)
-        predictions.append(y_pred)
-    
-    # Average predictions
-    y_pred_avg = np.mean(predictions, axis=0)
-    mse = mean_squared_error(y_test, y_pred_avg)
-    r2 = r2_score(y_test, y_pred_avg)
-    return y_pred_avg, mse, r2
+    y_pred = model.predict(x_test)
+    mse = mean_squared_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+    return y_pred, mse, r2
 
 
 class LinearModel:
@@ -191,11 +180,11 @@ y = df_grouped[target]
 x_train, x_test, y_train, y_test = train_test_split(
     x, y, test_size=0.2, random_state=42)
 
-ensemble, best_params = train_model(x_train, y_train)
-y_pred, mse, r2 = test_model(ensemble, x_test, y_test)
+model, best_params = train_model(x_train, y_train)
+y_pred, mse, r2 = test_model(model, x_test, y_test)
 
-with open('ensemble.pkl', 'wb') as file:
-    pickle.dump(ensemble, file)
+with open('gradboost.pkl', 'wb') as file:
+    pickle.dump(model, file)
     file.close()
 
 print("MSE: ", mse)
@@ -229,7 +218,7 @@ with open('initial_test_results.txt', 'w') as file:
 # Generate plots
 
 # Feature importance plot
-feature_importances = [rf.feature_importances_ for rf in ensemble]
+feature_importances = model.feature_importances_
 feature_importances_avg = np.mean(feature_importances, axis=0)
 plt.figure(figsize=(10, 6))
 sns.barplot(x=feature_importances_avg, y=features)
@@ -311,7 +300,8 @@ for _ in range(n_samples):
     y_sample = sample_df[target]
 
     # Train and test model on the bootstrap sample and the untouched test data
-    ensemble, _ = train_model(x_sample, y_sample, num_models=5, params=best_params)
+    ensemble, _ = train_model(
+        x_sample, y_sample, num_models=5, params=best_params)
     y_pred, mse, r2 = test_model(ensemble, x_test, y_test)
 
     linear = LinearModel()
@@ -323,7 +313,8 @@ for _ in range(n_samples):
     y_pred_naive = naive.predict(x_test)
 
     # Record the results
-    feature_importances.append(np.mean([model.feature_importances_ for model in ensemble], axis=0))
+    feature_importances.append(
+        np.mean([model.feature_importances_ for model in ensemble], axis=0))
     residuals.append(y_test - y_pred)
     mse_vals.append(mse)
     r2_vals.append(r2)
