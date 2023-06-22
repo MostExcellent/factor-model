@@ -31,7 +31,7 @@ def process_factors(df):
 
 
 csv_file = 'current_data.csv'
-model_file = 'model.pkl'
+model_file = 'ensemble.pkl'
 
 # Check if the file exists
 if not os.path.isfile(csv_file):
@@ -65,7 +65,10 @@ with open(model_file, 'rb') as file:
     model = pickle.load(file)
 
 # Make predictions
-df['Score'] = model.predict(df[features])
+scores = []
+for forest in model:
+    scores.append(forest.predict(df[features]))
+df['Score'] = sum(scores) / len(scores)
 df = df.sort_values('Score', ascending=False)
 # Save the data with the predictions
 df.to_csv('scored_data.csv', index=False)
