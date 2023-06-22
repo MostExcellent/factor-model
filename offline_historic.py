@@ -1,3 +1,4 @@
+
 import os
 import pickle
 
@@ -11,18 +12,21 @@ from sklearn.model_selection import GridSearchCV, train_test_split
 
 
 def normalize(x):
+    """
+    Normalize a pandas series by subtracting the mean and dividing by the standard deviation.
+    If the standard deviation is 0, return the series with the mean subtracted.
+    """
     x = x.fillna(x.mean())  # Fill NaNs with mean
     if x.std() == 0:
         return x - x.mean()
     else:
-        #print(f"x.std(): {x.std()}")
-        #print(f"x.mean(): {x.mean()}")
         return (x - x.mean()) / x.std()
-
-# Cap and floor outliers
 
 
 def cap_and_floor(df, column, lower_percentile, upper_percentile):
+    """
+    Cap and floor outliers in a pandas dataframe column based on percentiles.
+    """
     lower, upper = df[column].quantile([lower_percentile, upper_percentile])
     df[column] = np.where(df[column] < lower, lower, df[column])
     df[column] = np.where(df[column] > upper, upper, df[column])
@@ -30,14 +34,16 @@ def cap_and_floor(df, column, lower_percentile, upper_percentile):
 
 
 def process_factors(df):
+    """
+    Process factors for a given pandas dataframe by creating new columns for each factor,
+    normalizing each factor within each year, and returning a copy of the dataframe with the new columns.
+    """
     print("Processing factors...")
     df_copy = df.copy()
 
     # shift returns back one year
     df_copy['Momentum'] = df_copy.groupby(
         'Ticker')['ForwardReturn'].transform(lambda x: x.shift(1))
-    # df_copy['Momentum'] = df_copy.groupby(
-    #    'Ticker')['LogReturn'].transform(lambda x: x.shift(1))
     df_copy['Size'] = df_copy['MarketCap']
     df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']
     df_copy['Profitability'] = df_copy['ROE']
@@ -58,88 +64,146 @@ def process_factors(df):
     return df_copy
 
 
-def optimize_params(x, y, model=RandomForestRegressor(), method=GridSearchCV, param_grid=None):
-    if param_grid == None:
-        param_grid = {
-            'n_estimators': [10, 50, 100, 200],
-            'max_depth': [None, 10, 20, 30],
-            'min_samples_split': [2, 5, 10],
-            'min_samples_leaf': [1, 2, 4],
-            'max_features': ['auto', 'sqrt']
-        }
-    optimizer = method(estimator=model,
-                       param_grid=param_grid, cv=3, n_jobs=-1, verbose=2)
-    print("Tuning hyperparameters...")
-    optimizer.fit(x, y)
-    best_params = optimizer.best_params_
-    print(f"Best parameters: {best_params}")
-    return best_params
+class RFEnsemble:
+    """
+    Random forest ensemble class with hyperparameter tuning, training, and prediction methods.
+    """
 
+    def __init__(self, regressor, num_models=5, params=None):
+        self.num_models = num_models
+        self.params = params
+        self.regressor = regressor
+        self.models = []
+        self.feature_importances = []
 
-def train_model(x_train, y_train, num_models=5, params=None):
-    best_params = params
-    models = []
-    if best_params is None:
-        # Hyperparameter tuning
-        # Define the parameter grid
-        param_grid = {
-            'n_estimators': [10, 50, 100, 200],
-            'max_depth': [None, 10, 20, 30],
-            'min_samples_split': [2, 5, 10],
-            'min_samples_leaf': [1, 2, 4],
-            'max_features': ['auto', 'sqrt']
-        }
+    def optimize_params(self, x, y, method=GridSearchCV, param_grid=None):
+        """
+        Optimize the hyperparameters of the random forest regressor using the given method and parameter grid.
+        """
+        if param_grid == None:
+            param_grid = {
+                'n_estimators': [10, 50, 100, 200],
+                'max_depth': [None, 10, 20, 30],
+                'min_samples_split': [2, 5, 10],
+                'min_samples_leaf': [1, 2, 4],
+                'max_features': ['auto', 'sqrt']
+            }
+        optimizer = method(estimator=self.regressor,
+                           param_grid=param_grid, cv=3, n_jobs=-1, verbose=2)
+        print("Tuning hyperparameters...")
+        optimizer.fit(x, y)
+        best_params = optimizer.best_params_
+        print(f"Best parameters: {best_params}")
+        self.params = best_params
+        return best_params
 
-        rf = RandomForestRegressor()
+    def train(self, x_train, y_train, get_params=False):
+        """
+        Train the random forest ensemble on the given training data.
+        """
+        if self.params is None:
+            # Hyperparameter tuning
+            # Define the parameter grid
+            param_grid = {
+                'n_estimators': [10, 50, 100, 200],
+                'max_depth': [None, 10, 20, 30],
+                'min_samples_split': [2, 5, 10],
+                'min_samples_leaf': [1, 2, 4],
+                'max_features': ['auto', 'sqrt']
+            }
 
-        best_params = optimize_params(
-            x_train, y_train, rf, GridSearchCV, param_grid)
+            rf = RandomForestRegressor()
 
-    print("Training models...")
-    for _ in range(num_models):
-        model = RandomForestRegressor(**best_params)
-        model.fit(x_train, y_train)
-        models.append(model)
+            self.params = self.optimize_params(
+                x_train, y_train, rf, GridSearchCV, param_grid)
 
-    return models, best_params
+        print("Training models...")
+        for _ in range(self.num_models):
+            model = RandomForestRegressor(**self.params)
+            model.fit(x_train, y_train)
+            self.models.append(model)
+            self.feature_importances.append(model.feature_importances_)
+        if get_params:
+            return self.params
 
+    def get_mean_feature_importances(self):
+        """
+        Get the mean feature importances of the trained random forest ensemble.
+        """
+        return np.mean(self.feature_importances, axis=0)
 
-def test_model(models, x_test, y_test):
-    print("Testing model...")
-    predictions = []
-    for model in models:
-        y_pred = model.predict(x_test)
-        predictions.append(y_pred)
-    
-    # Average predictions
-    y_pred_avg = np.mean(predictions, axis=0)
-    mse = mean_squared_error(y_test, y_pred_avg)
-    r2 = r2_score(y_test, y_pred_avg)
-    return y_pred_avg, mse, r2
+    def predict(self, x_test):
+        """
+        Predict the output for the given input using the trained random forest ensemble.
+        """
+        print("Testing model...")
+        predictions = []
+        for model in self.models:
+            y_pred = model.predict(x_test)
+            predictions.append(y_pred)
+
+        # Average predictions
+        y_pred_avg = np.mean(predictions, axis=0)
+        return y_pred_avg
 
 
 class LinearModel:
-    """Linear regression model"""
+    """
+    Linear regression model class with fit, predict, and test methods.
+    """
 
     def fit(self, X, y):
+        """
+        Fit the linear regression model to the given data.
+        """
         y = y.flatten()
         self.coef = np.linalg.inv(X.T @ X) @ X.T @ y
 
     def predict(self, X):
+        """
+        Predict the output for the given input using the trained linear regression model.
+        """
         return X @ self.coef
+
+    def test(self, X, y):
+        """
+        Test the trained linear regression model on the given test data and return the mean squared error and R-squared.
+        """
+        y_pred = self.predict(X)
+        mse = mean_squared_error(y, y_pred)
+        r2 = r2_score(y, y_pred)
+        return mse, r2
 
 
 class NaiveModel:
-    """Naive model to simulate random chance"""
+    """
+    Naive model class to simulate random chance with fit, predict, and test methods.
+    """
 
     def fit(self, y):
+        """
+        Fit the naive model to the given data.
+        """
         self.mean = y.mean()
 
     def predict(self, x):
+        """
+        Predict the output for the given input using the naive model.
+        """
         return np.full((len(x), ), self.mean)
+
+    def test(self, x, y):
+        """
+        Test the naive model on the given test data and return the mean squared error and R-squared.
+        """
+        y_pred = self.predict(x)
+        mse = mean_squared_error(y, y_pred)
+        r2 = r2_score(y, y_pred)
+        return mse, r2
 
 
 csv_file = 'data.csv'
+
 
 # Check if the file exists
 if os.path.isfile(csv_file):
@@ -150,11 +214,27 @@ else:
     print(f"File {csv_file} not found. Exiting...")
     exit()
 
-# df = cap_and_floor(df, 'LastPrice', 0.01, 0.99)
-# df = cap_and_floor(df, 'MarketCap', 0.01, 0.99)
-# df = cap_and_floor(df, 'BookValuePerShare', 0.01, 0.99)
-# df = cap_and_floor(df, 'ROE', 0.01, 0.99)
-# df = cap_and_floor(df, 'FreeCashFlow', 0.01, 0.99)
+def clean_data(df):
+    """
+    Apply cap_and_floor function to specified columns in the given dataframe.
+    """
+    df = cap_and_floor(df, 'LastPrice', 0.01, 0.99)
+    df = cap_and_floor(df, 'MarketCap', 0.01, 0.99)
+    df = cap_and_floor(df, 'BookValuePerShare', 0.01, 0.99)
+    df = cap_and_floor(df, 'ROE', 0.01, 0.99)
+    df = cap_and_floor(df, 'FreeCashFlow', 0.01, 0.99)
+    return df
+
+
+# Check if the file exists
+if os.path.isfile(csv_file):
+    df = pd.read_csv(csv_file)
+    df = df.dropna(subset=['LastPrice', 'MarketCap',
+                   'BookValuePerShare', 'ROE', 'FreeCashFlow'])
+    #df = clean_data(df)
+else:
+    print(f"File {csv_file} not found. Exiting...")
+    exit()
 
 df = df.sort_values(by=['Ticker', 'Year'])
 df['ForwardReturn'] = df.groupby('Ticker')['LastPrice'].pct_change(-1)
@@ -163,8 +243,6 @@ df['ForwardReturnNorm'] = df.groupby(
 
 # Log returns
 df = df.sort_values(by=['Ticker', 'Year'])
-# df['LogReturn'] = np.log(df.groupby(
-#    'Ticker')['LastPrice'].shift(-1) / df['LastPrice'])
 df['LogReturn'] = np.log(df['ForwardReturn'] + 1)
 df.dropna(subset=['LogReturn', 'ForwardReturn'], inplace=True)
 df['LogReturnNorm'] = df.groupby('Year')['LogReturn'].transform(normalize)
@@ -191,12 +269,14 @@ y = df_grouped[target]
 x_train, x_test, y_train, y_test = train_test_split(
     x, y, test_size=0.2, random_state=42)
 
-ensemble, best_params = train_model(x_train, y_train)
-y_pred, mse, r2 = test_model(ensemble, x_test, y_test)
+model = RFEnsemble.train_model(x_train, y_train)
+y_pred, mse, r2 = RFEnsemble.test_model(model, x_test, y_test)
 
 with open('ensemble.pkl', 'wb') as file:
-    pickle.dump(ensemble, file)
+    pickle.dump(model, file)
     file.close()
+
+model_params = model.params
 
 print("MSE: ", mse)
 print("R2: ", r2)
@@ -204,16 +284,14 @@ print("R2: ", r2)
 linear_model = LinearModel()
 linear_model.fit(x_train.values, y_train.values)
 y_pred_linear = linear_model.predict(x_test)
-mse_linear = mean_squared_error(y_test, y_pred_linear)
-r2_linear = r2_score(y_test, y_pred_linear)
+mse_linear, r2_linear = linear_model.test_model(y_test, y_pred_linear)
 print("Linear MSE: ", mse_linear)
 print("Linear R2: ", r2_linear)
 
 naive_model = NaiveModel()
 naive_model.fit(y_train)
 y_pred_naive = naive_model.predict(x_test)
-mse_naive = mean_squared_error(y_test, y_pred_naive)
-r2_naive = r2_score(y_test, y_pred_naive)
+mse_naive, r2_naive = naive_model.test_model(y_test, y_pred_naive)
 print("Naive MSE: ", mse_naive)
 print("Naive R2: ", r2_naive)
 
@@ -304,6 +382,9 @@ x_train, x_test, y_train, y_test = train_test_split(
 train_df = pd.concat([x_train, y_train], axis=1)
 
 # Start the bootstrap analysis
+from factor_model.models import RFEnsemble, LinearModel, NaiveModel
+from sklearn.metrics import mean_squared_error, r2_score
+
 for _ in range(n_samples):
     # Bootstrap sample (with replacement) from the training data only
     sample_df = train_df.sample(frac=1, replace=True)
@@ -311,8 +392,11 @@ for _ in range(n_samples):
     y_sample = sample_df[target]
 
     # Train and test model on the bootstrap sample and the untouched test data
-    ensemble, _ = train_model(x_sample, y_sample, num_models=5, params=best_params)
-    y_pred, mse, r2 = test_model(ensemble, x_test, y_test)
+    ensemble = RFEnsemble(num_models=5)
+    ensemble.fit(x_sample, y_sample)
+    y_pred = ensemble.predict(x_test)
+    mse = mean_squared_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
 
     linear = LinearModel()
     linear.fit(x_sample.values, y_sample.values)
@@ -323,7 +407,7 @@ for _ in range(n_samples):
     y_pred_naive = naive.predict(x_test)
 
     # Record the results
-    feature_importances.append(np.mean([model.feature_importances_ for model in ensemble], axis=0))
+    feature_importances.append(ensemble.feature_importances_)
     residuals.append(y_test - y_pred)
     mse_vals.append(mse)
     r2_vals.append(r2)
