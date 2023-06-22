@@ -274,7 +274,7 @@ def get_data(fields, years=YEARS, index=INDEX):
     # fill remaining NaNs with the yearly mean
     fetched_df.fillna(yearly_means, inplace=True)
 
-    return df
+    return fetched_df
 
 
 # Load data from csv if it exists, else fetch from Bloomberg API
