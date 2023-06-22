@@ -50,7 +50,7 @@ PERIODICITY_SELECTION = Name('periodicitySelection')
 PERIODICITY_ADJUSTMENT = Name('periodicityAdjustment')
 NON_TRADING_DAY_FILL_OPTION = Name('nonTradingDayFillOption')
 NON_TRADING_DAY_FILL_METHOD = Name('nonTradingDayFillMethod')
-FIELD_NAMES = [Name(field) for field in FIELDS_LIST]
+#FIELD_NAMES = [Name(field) for field in FIELDS_LIST]
 
 
 def event_loop(e_session, timeout=7000):
@@ -204,12 +204,12 @@ def get_data(fields, years=YEARS, index=INDEX):
                     else:
                         continue
 
-                    field_exceptions = security_data.getElement(
-                        'fieldExceptions')
+                    # field_exceptions = security_data.getElement(
+                    #     'fieldExceptions')
 
-                    # If there are any field exceptions, skip this ticker for this year
-                    if field_exceptions.numValues() > 0:
-                        continue
+                    # # If there are any field exceptions, skip this ticker for this year
+                    # if field_exceptions.numValues() > 0:
+                    #     continue
 
                     field_data_array = security_data.getElement('fieldData')
 
@@ -244,19 +244,20 @@ def get_data(fields, years=YEARS, index=INDEX):
             except Exception as exception:
                 print(f"Error for {ticker} in {year}: {exception}")
                 # Append a placeholder row with NaNs in case there are issues.
-                data_rows.append({
-                    'Year': year,
-                    'Ticker': ticker,
-                    'LastPrice': np.nan,
-                    'MarketCap': np.nan,
-                    'BookValuePerShare': np.nan,
-                    'ROE': np.nan,
-                    'FreeCashFlow': np.nan,
-                    'IndustrySector': np.nan,
-                    'ForwardEPS': np.nan,
-                    'ForwardPE': np.nan,
-                    'ForwardROE': np.nan,
-                })
+                # data_rows.append({
+                #     'Year': year,
+                #     'Ticker': ticker,
+                #     'LastPrice': np.nan,
+                #     'MarketCap': np.nan,
+                #     'BookValuePerShare': np.nan,
+                #     'ROE': np.nan,
+                #     'FreeCashFlow': np.nan,
+                #     'IndustrySector': np.nan,
+                #     'ForwardEPS': np.nan,
+                #     'ForwardPE': np.nan,
+                #     'ForwardROE': np.nan,
+                # })
+                continue
 
     fetched_df = pd.DataFrame(data_rows)
     print(fetched_df.head())
@@ -264,7 +265,14 @@ def get_data(fields, years=YEARS, index=INDEX):
 
     fetched_df = df.groupby('Ticker').apply(
         lambda group: group.interpolate(method='linear'))
-    fetched_df.dropna(inplace=True)
+    # fetched_df.dropna(inplace=True)
+    fetched_df.dropna(subset=['LastPrice'], inplace=True)
+
+    # calculate the yearly mean for each column
+    yearly_means = fetched_df.groupby('Year').transform('mean')
+
+    # fill remaining NaNs with the yearly mean
+    fetched_df.fillna(yearly_means, inplace=True)
 
     return df
 
@@ -279,6 +287,6 @@ if os.path.isfile(CSV_FILE):
 else:
     print("Fetching data from Bloomberg API...")
     # Fetch data from the Bloomberg API
-    df = get_data(FIELDS, YEARS, INDEX)
+    df = get_data(FIELDS_LIST, YEARS, INDEX)
     # Save to csv to avoid making API calls again in the future
     df.to_csv(CSV_FILE, index=False)
