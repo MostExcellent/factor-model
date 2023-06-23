@@ -252,7 +252,7 @@ def get_data(fields, years=YEARS, index=INDEX):
     print(fetched_df.head())
     # Handle missing values by interpolation, then drop remaining NaNs
 
-    fetched_df = df.groupby('Ticker').apply(
+    fetched_df = fetched_df.groupby('Ticker').apply(
         lambda group: group.interpolate(method='linear'))
     # fetched_df.dropna(inplace=True)
     fetched_df.dropna(subset=['LastPrice'], inplace=True)

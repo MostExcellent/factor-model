@@ -119,7 +119,7 @@ class RFEnsemble:
             self.models.append(model)
             self.feature_importances.append(model.feature_importances_)
 
-    def get_mean_feature_importances(self):
+    def get_feature_importances(self):
         """
         Get the mean feature importances of the trained random forest ensemble.
         """
@@ -239,26 +239,21 @@ else:
     print(f"File {csv_file} not found. Exiting...")
     exit()
 
-df = df.sort_values(by=['Ticker', 'Year'])
+df.sort_values(by=['Ticker', 'Year'], inplace=True)
 df['ForwardReturn'] = df.groupby('Ticker')['LastPrice'].pct_change(-1)
-df['ForwardReturnNorm'] = df.groupby(
-    'Year')['ForwardReturn'].transform(normalize)
+df['ForwardReturnNorm'] = df.groupby('Year')['ForwardReturn'].transform(normalize)
 
 # Log returns
-df = df.sort_values(by=['Ticker', 'Year'])
 df['LogReturn'] = np.log(df['ForwardReturn'] + 1)
 df.dropna(subset=['LogReturn', 'ForwardReturn'], inplace=True)
 df['LogReturnNorm'] = df.groupby('Year')['LogReturn'].transform(normalize)
 
-#df_grouped = df.groupby(['Ticker', 'Year']).apply(process_factors)
 df_grouped = process_factors(df)
-print(df_grouped[['Momentum', 'ForwardReturn', 'Size',
-      'Value', 'Profitability', 'Investment']].isnull().sum())
-df_grouped.reset_index(inplace=True, drop=True)
+factors = ['Momentum', 'Size', 'Value', 'Profitability', 'Investment']
+print(df_grouped[[f'{f}Norm' for f in factors] + ['ForwardReturnNorm']].isnull().sum())
+df_grouped.reset_index(drop=True, inplace=True)
 
-features = ['MomentumNorm', 'SizeNorm', 'ValueNorm',
-            'ProfitabilityNorm', 'InvestmentNorm']
-#features = ['Momentum', 'Size', 'Value', 'Profitability', 'Investment']
+features = [f'{f}Norm' for f in factors]
 target = 'LogReturnNorm'
 #target = 'LogReturn'
 
@@ -312,9 +307,8 @@ with open('initial_test_results.txt', 'w') as file:
 
 # Feature importance plot
 feature_importances = model.get_feature_importances()
-feature_importances_avg = np.mean(feature_importances, axis=0)
 plt.figure(figsize=(10, 6))
-sns.barplot(x=feature_importances_avg, y=features)
+sns.barplot(x=feature_importances, y=features)
 plt.title('Feature Importance')
 plt.savefig('feature_importance.png')
 
@@ -409,7 +403,7 @@ for _ in range(n_samples):
     y_pred_naive = naive.predict(x_test)
 
     # Record the results
-    feature_importances.append(ensemble.feature_importances_)
+    feature_importances.append(ensemble.feature_importances)
     residuals.append(y_test - y_pred)
     mse_vals.append(mse)
     r2_vals.append(r2)
