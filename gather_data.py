@@ -243,20 +243,6 @@ def get_data(fields, years=YEARS, index=INDEX):
                         print(data_rows[-1])
             except Exception as exception:
                 print(f"Error for {ticker} in {year}: {exception}")
-                # Append a placeholder row with NaNs in case there are issues.
-                # data_rows.append({
-                #     'Year': year,
-                #     'Ticker': ticker,
-                #     'LastPrice': np.nan,
-                #     'MarketCap': np.nan,
-                #     'BookValuePerShare': np.nan,
-                #     'ROE': np.nan,
-                #     'FreeCashFlow': np.nan,
-                #     'IndustrySector': np.nan,
-                #     'ForwardEPS': np.nan,
-                #     'ForwardPE': np.nan,
-                #     'ForwardROE': np.nan,
-                # })
                 continue
 
     fetched_df = pd.DataFrame(data_rows)
