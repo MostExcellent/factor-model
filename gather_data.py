@@ -146,12 +146,12 @@ def get_industry_sector(ticker):
     return industry_sector
 
 
-def fetch_projections(ticker, year):
+def fetch_projections(tickers, year):
     """
-    Fetches the data for BEST_EPS and BEST_PE fields from Bloomberg for the given ticker and year.
+    Fetches the data for BEST_EPS and BEST_PE fields from Bloomberg for the given tickers and year.
     """
     request = ref_data_service.createRequest("ReferenceDataRequest")
-    request.append(SECURITIES, ticker)
+    request.append(SECURITIES, tickers)
     request.append(FIELDS, "BEST_EPS")
     request.append(FIELDS, "BEST_PE_RATIO")
     request.append(FIELDS, "BEST_ROE")
@@ -163,17 +163,18 @@ def fetch_projections(ticker, year):
     session.sendRequest(request)
     event = event_loop(session)
 
-    best_eps = np.nan
-    best_pe = np.nan
-    best_roe = np.nan
+    best_eps = {}
+    best_pe = {}
+    best_roe = {}
 
     for msg in event:
         security_data_array = msg.getElement('securityData')
         for securityData in security_data_array.values():
+            ticker = securityData.getElementAsString('security')
             fieldData = securityData.getElement('fieldData')
-            best_eps = fetch_field_data(fieldData, 'BEST_EPS')
-            best_pe = fetch_field_data(fieldData, 'BEST_PE_RATIO')
-            best_roe = fetch_field_data(fieldData, 'BEST_ROE')
+            best_eps[ticker] = fetch_field_data(fieldData, 'BEST_EPS')
+            best_pe[ticker] = fetch_field_data(fieldData, 'BEST_PE_RATIO')
+            best_roe[ticker] = fetch_field_data(fieldData, 'BEST_ROE')
 
     return best_eps, best_pe, best_roe
 
@@ -187,74 +188,65 @@ def get_data(fields, years=YEARS, index=INDEX):
     index_members = get_indx_for_years(years, index)
     for year in years:
         print(f"Year: {year}")
-        for ticker in index_members[year]:
-            #print(f'Processing {ticker}')
-            try:
-                request = ref_data_service.createRequest(
-                    "HistoricalDataRequest")
-                request.set(PERIODICITY_ADJUSTMENT, "ACTUAL")
-                request.set(PERIODICITY_SELECTION, "YEARLY")
-                request.set(START_DATE, f"{year}0101")
-                # changed end date to end of the year
-                request.set(END_DATE, f"{year}1231")
-                request.set(NON_TRADING_DAY_FILL_OPTION, "ALL_CALENDAR_DAYS")
-                request.set(NON_TRADING_DAY_FILL_METHOD, "PREVIOUS_VALUE")
-                request.append(SECURITIES, ticker)
-                for field in fields:
-                    request.append(FIELDS, field)
+        tickers = list(set([ticker for members in index_members[year] for ticker in members]))
+        try:
+            request = ref_data_service.createRequest(
+                "HistoricalDataRequest")
+            request.set(PERIODICITY_ADJUSTMENT, "ACTUAL")
+            request.set(PERIODICITY_SELECTION, "YEARLY")
+            request.set(START_DATE, f"{year}0101")
+            # changed end date to end of the year
+            request.set(END_DATE, f"{year}1231")
+            request.set(NON_TRADING_DAY_FILL_OPTION, "ALL_CALENDAR_DAYS")
+            request.set(NON_TRADING_DAY_FILL_METHOD, "PREVIOUS_VALUE")
+            request.append(SECURITIES, tickers)
+            for field in fields:
+                request.append(FIELDS, field)
 
-                session.sendRequest(request)
+            session.sendRequest(request)
 
-                event = event_loop(session)
+            event = event_loop(session)
 
-                # Get the response
-                for msg in event:
-                    # check if 'securityData' is present
-                    if msg.hasElement('securityData'):
-                        security_data = msg.getElement('securityData')
-                    else:
-                        continue
+            # Get the response
+            for msg in event:
+                # check if 'securityData' is present
+                if msg.hasElement('securityData'):
+                    security_data_array = msg.getElement('securityData')
+                else:
+                    continue
 
-                    # field_exceptions = security_data.getElement(
-                    #     'fieldExceptions')
+                for securityData in security_data_array.values():
+                    ticker = securityData.getElementAsString('security')
+                    field_data = securityData.getElement('fieldData')
 
-                    # # If there are any field exceptions, skip this ticker for this year
-                    # if field_exceptions.numValues() > 0:
-                    #     continue
-
-                    field_data_array = security_data.getElement('fieldData')
-
-                    for j in range(field_data_array.numValues()):
-                        field_data = field_data_array.getValueAsElement(j)
-
-                        last_price = fetch_field_data(field_data, 'PX_LAST')
-                        market_cap = fetch_field_data(
-                            field_data, 'CUR_MKT_CAP')
-                        book_value_per_share = fetch_field_data(
-                            field_data, 'BOOK_VAL_PER_SH')
-                        roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
-                        free_cash_flow = fetch_field_data(
-                            field_data, 'CF_FREE_CASH_FLOW')
-                        #industry_sector = get_industry_sector(ticker)
-                        best_eps, best_pe, best_roe = fetch_projections(
-                            ticker, year)
-                        data_rows.append({
-                            'Year': year,
-                            'Ticker': ticker,
-                            'LastPrice': last_price,
-                            'MarketCap': market_cap,
-                            'BookValuePerShare': book_value_per_share,
-                            'ROE': roe,
-                            'FreeCashFlow': free_cash_flow,
-                            # 'IndustrySector': industry_sector,
-                            'ForwardEPS': best_eps,
-                            'ForwardPE': best_pe,
-                            'ForwardROE': best_roe,
-                        })
-                        print(data_rows[-1])
-            except Exception as exception:
-                print(f"Error for {ticker} in {year}: {exception}")
-                continue
+                    last_price = fetch_field_data(field_data, 'PX_LAST')
+                    market_cap = fetch_field_data(
+                        field_data, 'CUR_MKT_CAP')
+                    book_value_per_share = fetch_field_data(
+                        field_data, 'BOOK_VAL_PER_SH')
+                    roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
+                    free_cash_flow = fetch_field_data(
+                        field_data, 'CF_FREE_CASH_FLOW')
+                    #industry_sector = get_industry_sector(ticker)
+                    best_eps, best_pe, best_roe = fetch_projections(
+                        [ticker], year)
+                    data_rows.append({
+                        'Year': year,
+                        'Ticker': ticker,
+                        'LastPrice': last_price,
+                        'MarketCap': market_cap,
+                        'BookValuePerShare': book_value_per_share,
+                        'ROE': roe,
+                        'FreeCashFlow': free_cash_flow,
+                        # 'IndustrySector': industry_sector,
+                        'ForwardEPS': best_eps[ticker],
+                        'ForwardPE': best_pe[ticker],
+                        'ForwardROE': best_roe[ticker],
+                    })
+                    print(data_rows[-1])
+        except Exception as exception:
+            print(f"Error for {ticker} in {year}: {exception}")
+            continue
 
     fetched_df = pd.DataFrame(data_rows)
     print(fetched_df.head())
