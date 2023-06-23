@@ -72,7 +72,6 @@ class RFEnsemble:
     def __init__(self, num_models=5, params=None):
         self.num_models = num_models
         self.params = params
-        self.regressor = regressor
         self.models = []
         self.feature_importances = []
 
