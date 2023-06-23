@@ -79,7 +79,7 @@ class RFEnsemble:
         """
         Optimize the hyperparameters of the random forest regressor using the given method and parameter grid.
         """
-        if param_grid == None:
+        if param_grid is None:
             param_grid = {
                 'n_estimators': [10, 50, 100, 200],
                 'max_depth': [None, 10, 20, 30],
@@ -87,16 +87,15 @@ class RFEnsemble:
                 'min_samples_leaf': [1, 2, 4],
                 'max_features': ['auto', 'sqrt']
             }
-        optimizer = method(estimator=self.regressor,
+        optimizer = method(estimator=RandomForestRegressor(),
                            param_grid=param_grid, cv=3, n_jobs=-1, verbose=2)
         print("Tuning hyperparameters...")
         optimizer.fit(x, y)
         best_params = optimizer.best_params_
         print(f"Best parameters: {best_params}")
         self.params = best_params
-        return best_params
 
-    def train(self, x_train, y_train, get_params=False):
+    def train(self, x_train, y_train):
         """
         Train the random forest ensemble on the given training data.
         """
@@ -111,10 +110,7 @@ class RFEnsemble:
                 'max_features': ['auto', 'sqrt']
             }
 
-            rf = RandomForestRegressor()
-
-            self.params = self.optimize_params(
-                x_train, y_train, rf, GridSearchCV, param_grid)
+            self.optimize_params(x_train, y_train, param_grid=param_grid)
 
         print("Training models...")
         for _ in range(self.num_models):
@@ -122,8 +118,6 @@ class RFEnsemble:
             model.fit(x_train, y_train)
             self.models.append(model)
             self.feature_importances.append(model.feature_importances_)
-        if get_params:
-            return self.params
 
     def get_mean_feature_importances(self):
         """
@@ -212,6 +206,7 @@ if os.path.isfile(csv_file):
 else:
     print(f"File {csv_file} not found. Exiting...")
     exit()
+
 
 def clean_data(df):
     """
@@ -389,7 +384,7 @@ for _ in range(n_samples):
     y_sample = sample_df[target]
 
     # Train and test model on the bootstrap sample and the untouched test data
-    ensemble = RFEnsemble(num_models=5)
+    ensemble = RFEnsemble(num_models=5, params=model_params)
     ensemble.fit(x_sample, y_sample)
     y_pred = ensemble.predict(x_test)
     mse = mean_squared_error(y_test, y_pred)
