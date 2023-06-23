@@ -4,3 +4,5 @@
 *.pkl
 *.txt
 check_rate_limit.py
+backtest.py
+backtest-gather.py

@@ -1,7 +1,5 @@
 # TODO: try monthly data and test different time periods
 
-# To load the data from csv
-import os
 # For timeout
 import time
 
@@ -17,7 +15,7 @@ END_YEAR = 2021
 INDEX = 'SPX Index'  # S&P 500
 
 # Fields for historical data request
-FIELDS_LIST = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
+HIST_FIELDS = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
                'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']
 
 # Start a Bloomberg session
@@ -63,7 +61,8 @@ def event_loop(e_session, timeout=7000):
         event = e_session.nextEvent(timeout)
         # type: ignore
         # type: ignore
-        if event.eventType() in [blpapi.Event.PARTIAL_RESPONSE, blpapi.Event.RESPONSE]: # type: ignore
+        # type: ignore
+        if event.eventType() in [blpapi.Event.PARTIAL_RESPONSE, blpapi.Event.RESPONSE]:
             break
         if time.time() > deadline:
             break
@@ -87,7 +86,8 @@ def get_index_members(index, year):
     request = ref_data_service.createRequest("ReferenceDataRequest")
     request.append(SECURITIES, index)
     request.append(FIELDS, "INDX_MEMBERS")
-
+    request.set(NON_TRADING_DAY_FILL_OPTION, "ALL_CALENDAR_DAYS")
+    request.set(NON_TRADING_DAY_FILL_METHOD, "PREVIOUS_VALUE")
     overrides = request.getElement(OVERRIDES)
     override1 = overrides.appendElement()
     override1.setElement(FIELDID, 'REFERENCE_DATE')
@@ -111,6 +111,7 @@ def get_index_members(index, year):
 
     print(f"members: {members[:5]}...")
     return members
+
 
 def get_indx_for_years(years, index=INDEX):
     """
@@ -146,60 +147,68 @@ def get_industry_sector(ticker):
     return industry_sector
 
 
-def fetch_projections(tickers, year):
+def fetch_projections(years, tickers_by_year):
     """
     Fetches the data for BEST_EPS and BEST_PE fields from Bloomberg for the given tickers and year.
     """
-    request = ref_data_service.createRequest("ReferenceDataRequest")
-    request.append(SECURITIES, tickers)
-    request.append(FIELDS, "BEST_EPS")
-    request.append(FIELDS, "BEST_PE_RATIO")
-    request.append(FIELDS, "BEST_ROE")
-    overrides = request.getElement(OVERRIDES)
-    override1 = overrides.appendElement()
-    override1.setElement(FIELDID, 'REFERENCE_DATE')
-    override1.setElement(VALUE, f"{year}0101")
+    data_rows = np.ndarray((0, 5))
 
-    session.sendRequest(request)
-    event = event_loop(session)
+    for year in years:
+        print(f"Fetching projections for {year}...")
+        request = ref_data_service.createRequest("ReferenceDataRequest")
+        request.append(SECURITIES, tickers_by_year[year])
+        request.append(FIELDS, "BEST_EPS")
+        request.append(FIELDS, "BEST_PE_RATIO")
+        request.append(FIELDS, "BEST_ROE")
+        # If not trading day, use previous trading day
+        request.set(NON_TRADING_DAY_FILL_OPTION, "ALL_CALENDAR_DAYS")
+        request.set(NON_TRADING_DAY_FILL_METHOD, "PREVIOUS_VALUE")
+        overrides = request.getElement(OVERRIDES)
+        override1 = overrides.appendElement()
+        override1.setElement(FIELDID, 'REFERENCE_DATE')
+        override1.setElement(VALUE, f"{year}0102")
 
-    best_eps = {}
-    best_pe = {}
-    best_roe = {}
+        session.sendRequest(request)
+        event = event_loop(session)
 
-    for msg in event:
-        security_data_array = msg.getElement('securityData')
-        for securityData in security_data_array.values():
-            ticker = securityData.getElementAsString('security')
-            fieldData = securityData.getElement('fieldData')
-            best_eps[ticker] = fetch_field_data(fieldData, 'BEST_EPS')
-            best_pe[ticker] = fetch_field_data(fieldData, 'BEST_PE_RATIO')
-            best_roe[ticker] = fetch_field_data(fieldData, 'BEST_ROE')
+        for msg in event:
+            security_data_array = msg.getElement('securityData')
+            for securityData in security_data_array.values():
+                ticker = securityData.getElementAsString('security')
+                fieldData = securityData.getElement('fieldData')
+                data_row = {
+                    'Year': year,
+                    'Ticker': ticker,
+                    'ForwardEPS': fetch_field_data(fieldData, 'BEST_EPS'),
+                    'ForwardPE': fetch_field_data(fieldData, 'BEST_PE_RATIO'),
+                    'ForwardROE': fetch_field_data(fieldData, 'BEST_ROE')
+                }
+                data_rows.append(data_row)
 
-    return best_eps, best_pe, best_roe
+    return pd.DataFrame.from_records(data_rows)
 
 
-def get_data(fields, years=YEARS, index=INDEX):
+def get_historical_data(fields, years, members_by_year):
     """
-    Gets data from Bloomberg for the given tickers, fields and years.
+    Gets historical data from Bloomberg for the given tickers, fields and years.
     """
-    print("Getting data from Bloomberg...")
-    data_rows = []
-    index_members = get_indx_for_years(years, index)
+    print("Getting historical data from Bloomberg...")
+    data_rows = np.ndarray((0, 5))
     for year in years:
         print(f"Year: {year}")
-        tickers = list(set([ticker for members in index_members[year] for ticker in members]))
+        tickers = members_by_year[year]
         try:
             request = ref_data_service.createRequest(
                 "HistoricalDataRequest")
             request.set(PERIODICITY_ADJUSTMENT, "ACTUAL")
             request.set(PERIODICITY_SELECTION, "YEARLY")
-            request.set(START_DATE, f"{year}0101")
+            request.set(START_DATE, f"{year}0102")
             # changed end date to end of the year
-            request.set(END_DATE, f"{year}1231")
+            request.set(END_DATE, f"{year}0110")
             request.set(NON_TRADING_DAY_FILL_OPTION, "ALL_CALENDAR_DAYS")
             request.set(NON_TRADING_DAY_FILL_METHOD, "PREVIOUS_VALUE")
             request.append(SECURITIES, tickers)
+
             for field in fields:
                 request.append(FIELDS, field)
 
@@ -228,9 +237,7 @@ def get_data(fields, years=YEARS, index=INDEX):
                     free_cash_flow = fetch_field_data(
                         field_data, 'CF_FREE_CASH_FLOW')
                     #industry_sector = get_industry_sector(ticker)
-                    best_eps, best_pe, best_roe = fetch_projections(
-                        [ticker], year)
-                    data_rows.append({
+                    data_row = {
                         'Year': year,
                         'Ticker': ticker,
                         'LastPrice': last_price,
@@ -239,43 +246,98 @@ def get_data(fields, years=YEARS, index=INDEX):
                         'ROE': roe,
                         'FreeCashFlow': free_cash_flow,
                         # 'IndustrySector': industry_sector,
-                        'ForwardEPS': best_eps[ticker],
-                        'ForwardPE': best_pe[ticker],
-                        'ForwardROE': best_roe[ticker],
-                    })
-                    print(data_rows[-1])
+                    }
+                    data_rows.append(data_row)
+                    print(data_row)
+
+        except Exception as exception:
+            print(f"Error for {ticker} in {year}: {exception}")
+            continue
+
+    fetched_df = pd.DataFrame.from_records(data_rows)
+    print(fetched_df.head())
+
+    return fetched_df
+
+
+def get_reference_data(years, members_by_year):
+    """
+    Gets reference data from Bloomberg for the given tickers and years.
+    """
+    print("Getting reference data from Bloomberg...")
+    data_rows = []
+    for year in years:
+        print(f"Year: {year}")
+        tickers = list(
+            set([ticker for members in members_by_year[year] for ticker in members]))
+        try:
+            request = ref_data_service.createRequest(
+                "ReferenceDataRequest")
+            request.append(SECURITIES, tickers)
+            request.append(FIELDS, "BEST_EPS")
+            request.append(FIELDS, "BEST_PE_RATIO")
+            request.append(FIELDS, "BEST_ROE")
+            overrides = request.getElement(OVERRIDES)
+            override1 = overrides.appendElement()
+            override1.setElement(FIELDID, 'REFERENCE_DATE')
+            override1.setElement(VALUE, f"{year}0102")
+
+            session.sendRequest(request)
+            event = event_loop(session)
+
+            best_eps = {}
+            best_pe = {}
+            best_roe = {}
+
+            for msg in event:
+                security_data_array = msg.getElement('securityData')
+                for securityData in security_data_array.values():
+                    ticker = securityData.getElementAsString('security')
+                    fieldData = securityData.getElement('fieldData')
+                    best_eps[ticker] = fetch_field_data(fieldData, 'BEST_EPS')
+                    best_pe[ticker] = fetch_field_data(
+                        fieldData, 'BEST_PE_RATIO')
+                    best_roe[ticker] = fetch_field_data(fieldData, 'BEST_ROE')
+
+            for ticker in tickers:
+                data_row = {
+                    'Year': year,
+                    'Ticker': ticker,
+                    'ForwardEPS': best_eps[ticker],
+                    'ForwardPE': best_pe[ticker],
+                    'ForwardROE': best_roe[ticker],
+                }
+                data_rows.append(data_row)
+                print(data_row)
+
         except Exception as exception:
             print(f"Error for {ticker} in {year}: {exception}")
             continue
 
     fetched_df = pd.DataFrame(data_rows)
     print(fetched_df.head())
-    # Handle missing values by interpolation, then drop remaining NaNs
-
-    fetched_df = fetched_df.groupby('Ticker').apply(
-        lambda group: group.interpolate(method='linear'))
-    # fetched_df.dropna(inplace=True)
-    fetched_df.dropna(subset=['LastPrice'], inplace=True)
-
-    # calculate the yearly mean for each column
-    yearly_means = fetched_df.groupby('Year').transform('mean')
-
-    # fill remaining NaNs with the yearly mean
-    fetched_df.fillna(yearly_means, inplace=True)
 
     return fetched_df
 
 
-# Load data from csv if it exists, else fetch from Bloomberg API
-CSV_FILE = 'data.csv'
-# Check if the file exists
-if os.path.isfile(CSV_FILE):
-    # Read from the file
-    print("Reading data from csv...")
-    df = pd.read_csv(CSV_FILE)
-else:
-    print("Fetching data from Bloomberg API...")
-    # Fetch data from the Bloomberg API
-    df = get_data(FIELDS_LIST, YEARS, INDEX)
-    # Save to csv to avoid making API calls again in the future
-    df.to_csv(CSV_FILE, index=False)
+members_by_year = get_indx_for_years(YEARS)
+historical_data = get_historical_data(HIST_FIELDS, YEARS, members_by_year)
+projections = fetch_projections(YEARS, members_by_year)
+
+# merge historical data with projections
+merged_df = pd.merge(historical_data, projections, on=['Year', 'Ticker'])
+
+# save unprocessed data
+merged_df.to_csv('unprocessed_data.csv', index=False)
+
+# Interpolate missing values
+merged_df = merged_df.groupby('Ticker').apply(
+    lambda group: group.interpolate(method='linear'))
+# Any values that are still NaN are set to the mean for that year
+merged_df = merged_df.groupby('Year').transform(
+    lambda group: group.fillna(group.mean()))
+# Drop any remaining NaNs
+merged_df.dropna(inplace=True)
+
+# save processed data
+merged_df.to_csv('processed_data.csv', index=False)

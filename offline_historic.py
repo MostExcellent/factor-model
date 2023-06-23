@@ -1,4 +1,5 @@
 
+import argparse
 import os
 import pickle
 
@@ -31,7 +32,6 @@ def cap_and_floor(df, column, lower_percentile, upper_percentile):
     df[column] = np.where(df[column] < lower, lower, df[column])
     df[column] = np.where(df[column] > upper, upper, df[column])
     return df
-
 
 def process_factors(df):
     """
@@ -257,9 +257,15 @@ features = [f'{f}Norm' for f in factors]
 target = 'LogReturnNorm'
 #target = 'LogReturn'
 
-print(df_grouped)
+#print number of nans in a column if it has any
+for feature in features:
+    feature_nan_sum = df_grouped[feature].isnull().sum()
+    if feature_nan_sum > 0:
+        print(f'{feature} has {feature_nan_sum} nans')
+
+print('Dropping nans...')
 df_grouped = df_grouped.dropna()  # Drop rows with NaN values
-print(df_grouped)
+#print(df_grouped)
 
 x = df_grouped[features]
 y = df_grouped[target]
@@ -342,8 +348,8 @@ plt.savefig('correlation_matrix.png')
 plt.figure(figsize=(10, 6))
 plt.scatter(y_test, y_pred)
 # Calculate the coefficients of the line of best fit.
-slope, intercept = np.polyfit(y_test, y_pred, 1)
-best_fit_line = np.poly1d([slope, intercept])
+slope, _ = np.polyfit(y_test, y_pred, 1, full=False, w=None, cov=False)
+best_fit_line = np.poly1d([slope, 0])
 x_values = np.linspace(min(y_test), max(y_test), 100)
 plt.plot(x_values, best_fit_line(x_values), color='red')
 plt.xlabel('Actual Returns')
@@ -351,8 +357,12 @@ plt.ylabel('Predicted Returns')
 plt.title('Predicted vs. Actual Returns')
 plt.savefig('predicted_vs_actual.png')
 
-# remove later
-# exit()
+parser = argparse.ArgumentParser()
+parser.add_argument('--no-bootstrap', action='store_true', help='Exit script before bootstrap analysis')
+args = parser.parse_args()
+
+if args.no_bootstrap:
+    exit()
 
 # Bootstrap analysis
 n_samples = 1000
