@@ -269,8 +269,9 @@ y = df_grouped[target]
 x_train, x_test, y_train, y_test = train_test_split(
     x, y, test_size=0.2, random_state=42)
 
-model = RFEnsemble.train_model(x_train, y_train)
-y_pred, mse, r2 = RFEnsemble.test_model(model, x_test, y_test)
+model = RFEnsemble()
+model = model.train(x_train, y_train)
+y_pred, mse, r2 = RFEnsemble.test(model, x_test, y_test)
 
 with open('ensemble.pkl', 'wb') as file:
     pickle.dump(model, file)
@@ -284,14 +285,13 @@ print("R2: ", r2)
 linear_model = LinearModel()
 linear_model.fit(x_train.values, y_train.values)
 y_pred_linear = linear_model.predict(x_test)
-mse_linear, r2_linear = linear_model.test_model(y_test, y_pred_linear)
+mse_linear, r2_linear = linear_model.test_model(x_test, y_test)
 print("Linear MSE: ", mse_linear)
 print("Linear R2: ", r2_linear)
 
 naive_model = NaiveModel()
 naive_model.fit(y_train)
-y_pred_naive = naive_model.predict(x_test)
-mse_naive, r2_naive = naive_model.test_model(y_test, y_pred_naive)
+mse_naive, r2_naive = naive_model.test_model(x_test, y_test)
 print("Naive MSE: ", mse_naive)
 print("Naive R2: ", r2_naive)
 
