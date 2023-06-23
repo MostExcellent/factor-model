@@ -91,7 +91,7 @@ def get_index_members(index, year):
     overrides = request.getElement(OVERRIDES)
     override1 = overrides.appendElement()
     override1.setElement(FIELDID, 'REFERENCE_DATE')
-    override1.setElement(VALUE, f"{year}1231")
+    override1.setElement(VALUE, f"{year}0102")
 
     session.sendRequest(request)
 
@@ -111,6 +111,16 @@ def get_index_members(index, year):
 
     print(f"members: {members[:5]}...")
     return members
+
+def get_indx_for_years(years, index=INDEX):
+    """
+    Gets the index members for the given years.
+    """
+    index_members_by_year = {}
+    for year in years:
+        index_members = get_index_members(index, year)
+        index_members_by_year[year] = index_members
+    return index_members_by_year
 
 
 def get_industry_sector(ticker):
@@ -174,9 +184,10 @@ def get_data(fields, years=YEARS, index=INDEX):
     """
     print("Getting data from Bloomberg...")
     data_rows = []
+    index_members = get_indx_for_years(years, index)
     for year in years:
         print(f"Year: {year}")
-        for ticker in get_index_members(index, year):
+        for ticker in index_members[year]:
             #print(f'Processing {ticker}')
             try:
                 request = ref_data_service.createRequest(

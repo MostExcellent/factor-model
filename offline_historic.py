@@ -139,6 +139,15 @@ class RFEnsemble:
         y_pred_avg = np.mean(predictions, axis=0)
         return y_pred_avg
 
+    def test(self, x_test, y_test):
+        """
+        Test the trained random forest ensemble on the given test data.
+        """
+        y_pred = self.predict(x_test)
+        mse = mean_squared_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
+        return y_pred, mse, r2
+
 
 class LinearModel:
     """
@@ -264,8 +273,9 @@ x_train, x_test, y_train, y_test = train_test_split(
     x, y, test_size=0.2, random_state=42)
 
 model = RFEnsemble()
-model = model.train(x_train, y_train)
-y_pred, mse, r2 = RFEnsemble.test(model, x_test, y_test)
+print(type(model))
+model.train(x_train, y_train)
+y_pred, mse, r2 = model.test(x_test, y_test)
 
 with open('ensemble.pkl', 'wb') as file:
     pickle.dump(model, file)
@@ -279,13 +289,13 @@ print("R2: ", r2)
 linear_model = LinearModel()
 linear_model.fit(x_train.values, y_train.values)
 y_pred_linear = linear_model.predict(x_test)
-mse_linear, r2_linear = linear_model.test_model(x_test, y_test)
+mse_linear, r2_linear = linear_model.test(x_test, y_test)
 print("Linear MSE: ", mse_linear)
 print("Linear R2: ", r2_linear)
 
 naive_model = NaiveModel()
 naive_model.fit(y_train)
-mse_naive, r2_naive = naive_model.test_model(x_test, y_test)
+mse_naive, r2_naive = naive_model.test(x_test, y_test)
 print("Naive MSE: ", mse_naive)
 print("Naive R2: ", r2_naive)
 
@@ -385,7 +395,7 @@ for _ in range(n_samples):
 
     # Train and test model on the bootstrap sample and the untouched test data
     ensemble = RFEnsemble(num_models=5, params=model_params)
-    ensemble.fit(x_sample, y_sample)
+    ensemble.train(x_sample, y_sample)
     y_pred = ensemble.predict(x_test)
     mse = mean_squared_error(y_test, y_pred)
     r2 = r2_score(y_test, y_pred)
