@@ -232,9 +232,6 @@ def clean_data(df):
 # Check if the file exists
 if os.path.isfile(csv_file):
     df = pd.read_csv(csv_file)
-    df = df.dropna(subset=['LastPrice', 'MarketCap',
-                   'BookValuePerShare', 'ROE', 'FreeCashFlow'])
-    #df = clean_data(df)
 else:
     print(f"File {csv_file} not found. Exiting...")
     exit()
@@ -330,13 +327,6 @@ plt.figure(figsize=(10, 6))
 plt.scatter(y_pred, residuals)
 plt.title('Residuals vs. Predicted Returns')
 plt.savefig('residuals_vs_predicted_returns.png')
-
-# Distribution of each factor
-# for factor in features:
-#     plt.figure(figsize=(10, 6))
-#     sns.histplot(df_grouped[factor], bins='auto', kde=True)
-#     plt.title(f'Distribution of {factor}')
-#     plt.savefig(f'{factor}_distribution.png')
 
 # Correlation matrix heatmap
 plt.figure(figsize=(10, 6))
