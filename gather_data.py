@@ -16,8 +16,8 @@ END_YEAR = 2021
 INDEX = 'SPX Index'  # S&P 500
 
 # Fields for historical data request
-HIST_FIELDS = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
-               'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW']
+FIELDS_LIST = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
+               'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW', 'BEST_EPS', 'BEST_PE_RATIO', 'BEST_ROE', 'INDUSTRY_SECTOR']
 
 # Start a Bloomberg session
 session = blpapi.Session()  # Start a Bloomberg session
@@ -124,93 +124,29 @@ def get_indx_for_years(years, index=INDEX):
     return index_members_by_year
 
 
-def get_industry_sector(ticker):
+def get_data(fields, years):
     """
-    Gets the industry sector for the given ticker.
+    Gets historical and reference data from Bloomberg for the given tickers, fields and years.
     """
-    request = ref_data_service.createRequest("ReferenceDataRequest")
-    request.append(SECURITIES, ticker)
-    request.append(FIELDS, "INDUSTRY_SECTOR")
-
-    session.sendRequest(request)
-
-    event = event_loop(session)
-    industry_sector = np.nan
-    for msg in event:
-        security_data_array = msg.getElement('securityData')
-        for security_data in security_data_array.values():
-            field_data = security_data.getElement('fieldData')
-            if field_data.hasElement('INDUSTRY_SECTOR'):
-                industry_sector = field_data.getElementAsString(
-                    'INDUSTRY_SECTOR')
-
-    return industry_sector
-
-
-def fetch_projections(years, tickers_by_year):
-    """
-    Fetches the data for BEST_EPS and BEST_PE fields from Bloomberg for the given tickers and year.
-    """
-    data_rows = []
-
-    for year in years:
-        print(f"Fetching projections for {year}...")
-        request = ref_data_service.createRequest("ReferenceDataRequest")
-        request.append(SECURITIES, tickers_by_year[year])
-        request.append(FIELDS, "BEST_EPS")
-        request.append(FIELDS, "BEST_PE_RATIO")
-        request.append(FIELDS, "BEST_ROE")
-
-        overrides = request.getElement(OVERRIDES)
-        override1 = overrides.appendElement()
-        override1.setElement(FIELDID, 'REFERENCE_DATE')
-        override1.setElement(VALUE, f"{year}1231")
-
-        session.sendRequest(request)
-        event = event_loop(session)
-
-        for msg in event:
-            security_data_array = msg.getElement('securityData')
-            for securityData in security_data_array.values():
-                ticker = securityData.getElementAsString('security')
-                fieldData = securityData.getElement('fieldData')
-                data_row = {
-                    'Year': year,
-                    'Ticker': ticker,
-                    'ForwardEPS': fetch_field_data(fieldData, 'BEST_EPS'),
-                    'ForwardPE': fetch_field_data(fieldData, 'BEST_PE_RATIO'),
-                    'ForwardROE': fetch_field_data(fieldData, 'BEST_ROE')
-                }
-                data_rows.append(data_row)
-
-    return pd.DataFrame.from_records(data_rows)
-
-
-def get_historical_data(fields, years, members_by_year):
-    """
-    Gets historical data from Bloomberg for the given tickers, fields and years.
-    """
-    print("Getting historical data from Bloomberg...")
+    print("Getting data from Bloomberg...")
+    print("Getting index members...")
+    members_by_year = get_indx_for_years(years)
+    print("Getting field data...")
     data_rows = []
     for year in tqdm(years, desc="Years"):
-        # print(f"Year: {year}")
         tickers = members_by_year[year]
-        #print(tickers)
         try:
             for ticker in tqdm(tickers, desc="Tickers"):
                 request = ref_data_service.createRequest(
-                    "HistoricalDataRequest")
-                #request.set(PERIODICITY_ADJUSTMENT, "ACTUAL")
-                request.set(PERIODICITY_SELECTION, "YEARLY")
-                request.set(START_DATE, f"{year}0101")
-                # changed end date to end of the year
-                request.set(END_DATE, f"{year}1231")
-                request.set(NON_TRADING_DAY_FILL_OPTION, "ALL_CALENDAR_DAYS")
-                request.set(NON_TRADING_DAY_FILL_METHOD, "PREVIOUS_VALUE")
+                    "ReferenceDataRequest")
                 request.append(SECURITIES, ticker)
                 for field in fields:
-                    #print(field)
                     request.append(FIELDS, field)
+
+                overrides = request.getElement(OVERRIDES)
+                override1 = overrides.appendElement()
+                override1.setElement(FIELDID, 'REFERENCE_DATE')
+                override1.setElement(VALUE, f"{year}0105")
 
                 session.sendRequest(request)
 
@@ -224,9 +160,7 @@ def get_historical_data(fields, years, members_by_year):
                     else:
                         print("No security data found")
                         continue
-                    #print(security_data_array)
                     for securityData in security_data_array.values():
-                        #print(securityData)
                         ticker = securityData.getElementAsString('security')
                         field_data = securityData.getElement('fieldData')
 
@@ -238,7 +172,10 @@ def get_historical_data(fields, years, members_by_year):
                         roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
                         free_cash_flow = fetch_field_data(
                             field_data, 'CF_FREE_CASH_FLOW')
-                        #industry_sector = get_industry_sector(ticker)
+                        best_eps = fetch_field_data(field_data, 'BEST_EPS')
+                        best_pe = fetch_field_data(field_data, 'BEST_PE_RATIO')
+                        best_roe = fetch_field_data(field_data, 'BEST_ROE')
+
                         data_row = {
                             'Year': year,
                             'Ticker': ticker,
@@ -247,7 +184,9 @@ def get_historical_data(fields, years, members_by_year):
                             'BookValuePerShare': book_value_per_share,
                             'ROE': roe,
                             'FreeCashFlow': free_cash_flow,
-                            # 'IndustrySector': industry_sector,
+                            'ForwardEPS': best_eps,
+                            'ForwardPE': best_pe,
+                            'ForwardROE': best_roe,
                         }
                         data_rows.append(data_row)
                         print(data_row)
@@ -262,80 +201,23 @@ def get_historical_data(fields, years, members_by_year):
     return fetched_df
 
 
-def get_reference_data(years, members_by_year):
-    """
-    Gets reference data from Bloomberg for the given tickers and years.
-    """
-    print("Getting reference data from Bloomberg...")
-    data_rows = []
-    for year in tqdm(years, desc="Years"):
-        try:
-            for ticker in tqdm(members_by_year[year], desc="Tickers"):
-                request = ref_data_service.createRequest(
-                    "ReferenceDataRequest")
-                request.append(SECURITIES, ticker)
-                request.append(FIELDS, "BEST_EPS")
-                request.append(FIELDS, "BEST_PE_RATIO")
-                request.append(FIELDS, "BEST_ROE")
-                overrides = request.getElement(OVERRIDES)
-                override1 = overrides.appendElement()
-                override1.setElement(FIELDID, 'REFERENCE_DATE')
-                override1.setElement(VALUE, f"{year}1231")
-
-                session.sendRequest(request)
-                event = event_loop(session)
-
-                best_eps = {}
-                best_pe = {}
-                best_roe = {}
-
-                for msg in event:
-                    security_data_array = msg.getElement('securityData')
-                    for securityData in security_data_array.values():
-                        ticker = securityData.getElementAsString('security')
-                        fieldData = securityData.getElement('fieldData')
-                        best_eps[ticker] = fetch_field_data(fieldData, 'BEST_EPS')
-                        best_pe[ticker] = fetch_field_data(
-                            fieldData, 'BEST_PE_RATIO')
-                        best_roe[ticker] = fetch_field_data(fieldData, 'BEST_ROE')
-
-                data_row = {
-                    'Year': year,
-                    'Ticker': ticker,
-                    'ForwardEPS': best_eps[ticker],
-                    'ForwardPE': best_pe[ticker],
-                    'ForwardROE': best_roe[ticker],
-                }
-                data_rows.append(data_row)
-
-        except Exception as exception:
-            print(f"Error for {ticker} in {year}: {exception}")
-            continue
-
-    fetched_df = pd.DataFrame(data_rows)
-    print(fetched_df.head())
-
-    return fetched_df
-
-
 members_by_year = get_indx_for_years(YEARS)
-historical_data = get_historical_data(HIST_FIELDS, YEARS, members_by_year)
-projections = fetch_projections(YEARS, members_by_year)
-
-# merge historical data with projections
-merged_df = pd.merge(historical_data, projections, on=['Year', 'Ticker'])
+data = get_data(FIELDS, YEARS)
 
 # save unprocessed data
-merged_df.to_csv('unprocessed_data.csv', index=False)
+data.to_csv('unprocessed_data.csv', index=False)
+
+# Remove duplicates
+data.drop_duplicates(inplace=True)
 
 # Interpolate missing values
-merged_df = merged_df.groupby('Ticker').apply(
+data = data.groupby('Ticker').apply(
     lambda group: group.interpolate(method='linear'))
 # Any values that are still NaN are set to the mean for that year
-merged_df = merged_df.groupby('Year').transform(
+data = data.groupby('Year').transform(
     lambda group: group.fillna(group.mean()))
 # Drop any remaining NaNs
-merged_df.dropna(inplace=True)
+data.dropna(inplace=True)
 
 # save processed data
-merged_df.to_csv('processed_data.csv', index=False)
+data.to_csv('processed_data.csv', index=False)
