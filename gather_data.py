@@ -150,7 +150,8 @@ def get_data(fields, years):
 
                         data_row = {'Year': year, 'Ticker': ticker}
                         for field in fields:
-                            data_row[field] = fetch_field_data(field_data, field)
+                            data_row[field] = fetch_field_data(
+                                field_data, field)
                         data_rows.append(data_row)
 
         except Exception as exception:
@@ -161,6 +162,7 @@ def get_data(fields, years):
     print(fetched_df.head())
 
     return fetched_df
+
 
 if os.path.exists('unprocessed_data.csv'):
     data = pd.read_csv('unprocessed_data.csv')

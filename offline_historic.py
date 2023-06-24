@@ -33,6 +33,7 @@ def cap_and_floor(df, column, lower_percentile, upper_percentile):
     df[column] = np.where(df[column] > upper, upper, df[column])
     return df
 
+
 def process_factors(df):
     """
     Process factors for a given pandas dataframe by creating new columns for each factor,
@@ -44,23 +45,20 @@ def process_factors(df):
     # shift returns back one year
     df_copy['Momentum'] = df_copy.groupby(
         'Ticker')['ForwardReturn'].transform(lambda x: x.shift(1))
-    df_copy['Size'] = df_copy['MarketCap']
-    df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']
-    df_copy['Profitability'] = df_copy['ROE']
-    df_copy['Investment'] = df_copy['FreeCashFlow'] / df_copy['MarketCap']
+    df_copy['Size'] = df_copy['CUR_MKT_CAP']
+    df_copy['Value'] = df_copy['BOOK_VAL_PER_SH'] / df_copy['PX_LAST']
+    df_copy['ROE'] = df_copy['RETURN_COM_EQY']
+    df_copy['ForwardROE'] = df_copy['BEST_ROE']
+    df_copy['FCF'] = df_copy['CF_FREE_CASH_FLOW'] / df_copy['CUR_MKT_CAP']
+    df_copy['ForwardEarnings'] = df_copy['BEST_EPS']
+    df_copy['ForwardPE'] = df_copy['BEST_PE_RATIO']
 
-    # Normalize within each industry
-    df_copy['MomentumNorm'] = df_copy.groupby(
-        ['Year'])['Momentum'].transform(normalize)
-    df_copy['SizeNorm'] = df_copy.groupby(
-        ['Year'])['Size'].transform(normalize)
-    df_copy['ValueNorm'] = df_copy.groupby(
-        ['Year'])['Value'].transform(normalize)
-    df_copy['ProfitabilityNorm'] = df_copy.groupby(
-        ['Year'])['Profitability'].transform(normalize)
-    df_copy['InvestmentNorm'] = df_copy.groupby(
-        ['Year'])['Investment'].transform(normalize)
-
+    # Normalize within each year
+    for col in ['Momentum', 'Size', 'Value', 'ROE', 'ForwardROE', 'FCF', 'ForwardEarnings', 'ForwardPE']:
+        df_copy[f'{col}Norm'] = df_copy.groupby(
+            ['Year'])[col].transform(normalize)
+        
+    df_copy = df_copy.dropna()    
     return df_copy
 
 
@@ -204,14 +202,15 @@ class NaiveModel:
         return mse, r2
 
 
-csv_file = 'data.csv'
+csv_file = 'processed_data.csv'
 
 
 # Check if the file exists
 if os.path.isfile(csv_file):
     df = pd.read_csv(csv_file)
-    df = df.dropna(subset=['LastPrice', 'MarketCap',
-                   'BookValuePerShare', 'ROE', 'FreeCashFlow'])
+    df = df.dropna()
+    # df = df.dropna(subset=['LastPrice', 'MarketCap',
+    #                'BookValuePerShare', 'ROE', 'FreeCashFlow'])
 else:
     print(f"File {csv_file} not found. Exiting...")
     exit()
@@ -221,11 +220,9 @@ def clean_data(df):
     """
     Apply cap_and_floor function to specified columns in the given dataframe.
     """
-    df = cap_and_floor(df, 'LastPrice', 0.01, 0.99)
-    df = cap_and_floor(df, 'MarketCap', 0.01, 0.99)
-    df = cap_and_floor(df, 'BookValuePerShare', 0.01, 0.99)
-    df = cap_and_floor(df, 'ROE', 0.01, 0.99)
-    df = cap_and_floor(df, 'FreeCashFlow', 0.01, 0.99)
+    for col in df.select_dtypes(include=np.number).columns:
+        if col != 'Year':
+            df = cap_and_floor(df, col, 0.01, 0.99)
     return df
 
 
@@ -237,35 +234,38 @@ else:
     exit()
 
 df.sort_values(by=['Ticker', 'Year'], inplace=True)
-df['ForwardReturn'] = df.groupby('Ticker')['LastPrice'].pct_change(-1)
+df['ForwardReturn'] = df.groupby('Ticker')['PX_LAST'].pct_change(-1)
+print(df.head())
+df.dropna(subset=['ForwardReturn'], inplace=True)
 df['ForwardReturnNorm'] = df.groupby('Year')['ForwardReturn'].transform(normalize)
 
 # Log returns
 df['LogReturn'] = np.log(df['ForwardReturn'] + 1)
-df.dropna(subset=['LogReturn', 'ForwardReturn'], inplace=True)
+# df.dropna(subset=['LogReturn', 'ForwardReturn'], inplace=True)
 df['LogReturnNorm'] = df.groupby('Year')['LogReturn'].transform(normalize)
 
 df_grouped = process_factors(df)
-factors = ['Momentum', 'Size', 'Value', 'Profitability', 'Investment']
-print(df_grouped[[f'{f}Norm' for f in factors] + ['ForwardReturnNorm']].isnull().sum())
+factors = [col[:-4] for col in df_grouped.columns if col.endswith('Norm')]
+print(df_grouped[factors + ['ForwardReturnNorm']].isnull().sum())
 df_grouped.reset_index(drop=True, inplace=True)
 
-features = [f'{f}Norm' for f in factors]
+features = [col for col in df_grouped.columns if col.endswith('Norm')]
 target = 'LogReturnNorm'
 #target = 'LogReturn'
 
-#print number of nans in a column if it has any
+# print number of nans in a column if it has any
 for feature in features:
     feature_nan_sum = df_grouped[feature].isnull().sum()
     if feature_nan_sum > 0:
         print(f'{feature} has {feature_nan_sum} nans')
 
-print('Dropping nans...')
-df_grouped = df_grouped.dropna()  # Drop rows with NaN values
-#print(df_grouped)
-
 x = df_grouped[features]
 y = df_grouped[target]
+
+print(x.shape)
+print(y.shape)
+print(x.head())
+print(y.head())
 
 x_train, x_test, y_train, y_test = train_test_split(
     x, y, test_size=0.2, random_state=42)
@@ -348,7 +348,8 @@ plt.title('Predicted vs. Actual Returns')
 plt.savefig('predicted_vs_actual.png')
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--no-bootstrap', action='store_true', help='Exit script before bootstrap analysis')
+parser.add_argument('--no-bootstrap', action='store_true',
+                    help='Exit script before bootstrap analysis')
 args = parser.parse_args()
 
 if args.no_bootstrap:
