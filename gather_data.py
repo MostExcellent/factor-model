@@ -17,7 +17,7 @@ INDEX = 'SPX Index'  # S&P 500
 
 # Fields for historical data request
 FIELDS_LIST = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
-               'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW', 'BEST_EPS', 'BEST_PE_RATIO', 'BEST_ROE', 'INDUSTRY_SECTOR']
+               'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW', 'BEST_EPS', 'BEST_PE_RATIO', 'BEST_ROE']
 
 # Start a Bloomberg session
 session = blpapi.Session()  # Start a Bloomberg session
@@ -153,18 +153,18 @@ def get_data(fields, years):
                 for msg in event:
                     # check if 'securityData' is present
                     if msg.hasElement('securityData'):
-                        security_data = msg.getElement('securityData')
+                        security_data_array = msg.getElement('securityData')
                     else:
                         print("No security data found")
                         continue
-                    ticker = security_data.getElementAsString('security')
-                    field_data = security_data.getElement('fieldData')
+                    for security_data in security_data_array.values():
+                        ticker = security_data.getElementAsString('security')
+                        field_data = security_data.getElement('fieldData')
 
-                    data_row = {'Year': year, 'Ticker': ticker}
-                    for field in fields:
-                        data_row[field] = fetch_field_data(field_data, field)
-                    data_rows.append(data_row)
-                    print(data_row)
+                        data_row = {'Year': year, 'Ticker': ticker}
+                        for field in fields:
+                            data_row[field] = fetch_field_data(field_data, field)
+                        data_rows.append(data_row)
 
         except Exception as exception:
             print(f"Error for {year}: {exception}")
