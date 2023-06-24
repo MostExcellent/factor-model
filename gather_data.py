@@ -153,40 +153,18 @@ def get_data(fields, years):
                 for msg in event:
                     # check if 'securityData' is present
                     if msg.hasElement('securityData'):
-                        security_data_array = msg.getElement('securityData')
+                        security_data = msg.getElement('securityData')
                     else:
                         print("No security data found")
                         continue
-                    for securityData in security_data_array.values():
-                        ticker = securityData.getElementAsString('security')
-                        field_data = securityData.getElement('fieldData')
+                    ticker = security_data.getElementAsString('security')
+                    field_data = security_data.getElement('fieldData')
 
-                        last_price = fetch_field_data(field_data, 'PX_LAST')
-                        market_cap = fetch_field_data(
-                            field_data, 'CUR_MKT_CAP')
-                        book_value_per_share = fetch_field_data(
-                            field_data, 'BOOK_VAL_PER_SH')
-                        roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
-                        free_cash_flow = fetch_field_data(
-                            field_data, 'CF_FREE_CASH_FLOW')
-                        best_eps = fetch_field_data(field_data, 'BEST_EPS')
-                        best_pe = fetch_field_data(field_data, 'BEST_PE_RATIO')
-                        best_roe = fetch_field_data(field_data, 'BEST_ROE')
-
-                        data_row = {
-                            'Year': year,
-                            'Ticker': ticker,
-                            'LastPrice': last_price,
-                            'MarketCap': market_cap,
-                            'BookValuePerShare': book_value_per_share,
-                            'ROE': roe,
-                            'FreeCashFlow': free_cash_flow,
-                            'ForwardEPS': best_eps,
-                            'ForwardPE': best_pe,
-                            'ForwardROE': best_roe,
-                        }
-                        data_rows.append(data_row)
-                        print(data_row)
+                    data_row = {'Year': year, 'Ticker': ticker}
+                    for field in fields:
+                        data_row[field] = fetch_field_data(field_data, field)
+                    data_rows.append(data_row)
+                    print(data_row)
 
         except Exception as exception:
             print(f"Error for {year}: {exception}")
@@ -197,15 +175,13 @@ def get_data(fields, years):
 
     return fetched_df
 
-
-members_by_year = get_indx_for_years(YEARS)
-data = get_data(FIELDS, YEARS)
+data = get_data(FIELDS_LIST, YEARS)
 
 # save unprocessed data
 data.to_csv('unprocessed_data.csv', index=False)
 
-# Remove duplicates
-data.drop_duplicates(inplace=True)
+# Remove duplicate years
+data = data.drop_duplicates(subset=['Year', 'Ticker'], keep='last')
 
 # Interpolate missing values
 data = data.groupby('Ticker').apply(
