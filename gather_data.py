@@ -1,5 +1,6 @@
 # TODO: try monthly data and test different time periods
 
+import os
 # For timeout
 import time
 
@@ -175,10 +176,12 @@ def get_data(fields, years):
 
     return fetched_df
 
-data = get_data(FIELDS_LIST, YEARS)
-
-# save unprocessed data
-data.to_csv('unprocessed_data.csv', index=False)
+if os.path.exists('unprocessed_data.csv'):
+    data = pd.read_csv('unprocessed_data.csv')
+else:
+    data = get_data(FIELDS_LIST, YEARS)
+    # save unprocessed data
+    data.to_csv('unprocessed_data.csv', index=False)
 
 # Remove duplicate years
 data = data.drop_duplicates(subset=['Year', 'Ticker'], keep='last')
