@@ -20,20 +20,6 @@ INDEX = 'SPX Index'  # S&P 500
 FIELDS_LIST = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
                'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW', 'BEST_EPS', 'BEST_PE_RATIO', 'BEST_ROE']
 
-# Start a Bloomberg session
-session = blpapi.Session()  # Start a Bloomberg session
-session.start()
-
-# Open the reference data service
-if not session.openService("//blp/refdata"):
-    print("Failed to open //blp/refdata")
-    session.stop()
-    exit()
-
-ref_data_service = session.getService("//blp/refdata")
-
-# Bloomberg fields
-
 YEARS = np.arange(START_YEAR, END_YEAR)  # Sample period
 
 # names for use with blpapi
@@ -179,6 +165,17 @@ def get_data(fields, years):
 if os.path.exists('unprocessed_data.csv'):
     data = pd.read_csv('unprocessed_data.csv')
 else:
+    # Start a Bloomberg session
+    session = blpapi.Session()  # Start a Bloomberg session
+    session.start()
+
+    # Open the reference data service
+    if not session.openService("//blp/refdata"):
+        print("Failed to open //blp/refdata")
+        session.stop()
+        exit()
+
+    ref_data_service = session.getService("//blp/refdata")
     data = get_data(FIELDS_LIST, YEARS)
     # save unprocessed data
     data.to_csv('unprocessed_data.csv', index=False)
