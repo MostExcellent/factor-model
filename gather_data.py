@@ -187,8 +187,8 @@ data = data.drop_duplicates(subset=['Year', 'Ticker'], keep='last')
 data = data.groupby('Ticker').apply(
     lambda group: group.interpolate(method='linear'))
 # Any values that are still NaN are set to the mean for that year
-data = data.groupby('Year').transform(
-    lambda group: group.fillna(group.mean()))
+data = data.groupby('Year').apply(
+    lambda group: group.fillna(group.mean(numeric_only=True)))
 # Drop any remaining NaNs
 data.dropna(inplace=True)
 
