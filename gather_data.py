@@ -268,19 +268,18 @@ def get_reference_data(years, members_by_year):
     data_rows = []
     for year in years:
         print(f"Year: {year}")
-        tickers = list(
-            set([ticker for members in members_by_year[year] for ticker in members]))
         try:
             request = ref_data_service.createRequest(
                 "ReferenceDataRequest")
-            request.append(SECURITIES, tickers)
+            for ticker in members_by_year[year]:
+                request.append(SECURITIES, ticker)
             request.append(FIELDS, "BEST_EPS")
             request.append(FIELDS, "BEST_PE_RATIO")
             request.append(FIELDS, "BEST_ROE")
             overrides = request.getElement(OVERRIDES)
             override1 = overrides.appendElement()
             override1.setElement(FIELDID, 'REFERENCE_DATE')
-            override1.setElement(VALUE, f"{year}0102")
+            override1.setElement(VALUE, f"{year}0105")
 
             session.sendRequest(request)
             event = event_loop(session)
@@ -299,7 +298,7 @@ def get_reference_data(years, members_by_year):
                         fieldData, 'BEST_PE_RATIO')
                     best_roe[ticker] = fetch_field_data(fieldData, 'BEST_ROE')
 
-            for ticker in tickers:
+            for ticker in members_by_year[year]:
                 data_row = {
                     'Year': year,
                     'Ticker': ticker,
