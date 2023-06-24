@@ -91,7 +91,7 @@ def get_index_members(index, year):
     overrides = request.getElement(OVERRIDES)
     override1 = overrides.appendElement()
     override1.setElement(FIELDID, 'REFERENCE_DATE')
-    override1.setElement(VALUE, f"{year}1231")
+    override1.setElement(VALUE, f"{year}0105")
 
     session.sendRequest(request)
 
