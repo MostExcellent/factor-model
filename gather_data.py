@@ -9,6 +9,7 @@ import numpy as np
 # Fun stuff
 import pandas as pd
 from blpapi import Name
+from tqdm import tqdm
 
 START_YEAR = 2010
 END_YEAR = 2021
@@ -191,64 +192,65 @@ def get_historical_data(fields, years, members_by_year):
     """
     print("Getting historical data from Bloomberg...")
     data_rows = np.ndarray((0, 5))
-    for year in years:
-        print(f"Year: {year}")
+    for year in tqdm(years, desc="Years"):
+        # print(f"Year: {year}")
         tickers = members_by_year[year]
         #print(tickers)
         try:
-            request = ref_data_service.createRequest(
-                "HistoricalDataRequest")
-            #request.set(PERIODICITY_ADJUSTMENT, "ACTUAL")
-            request.set(PERIODICITY_SELECTION, "YEARLY")
-            request.set(START_DATE, f"{year}0105")
-            # changed end date to end of the year
-            request.set(END_DATE, f"{year}0110")
-            request.set(NON_TRADING_DAY_FILL_OPTION, "ALL_CALENDAR_DAYS")
-            request.set(NON_TRADING_DAY_FILL_METHOD, "PREVIOUS_VALUE")
-            for ticker in tickers:
+            for ticker in tqdm(tickers, desc="Tickers"):
+                request = ref_data_service.createRequest(
+                    "HistoricalDataRequest")
+                #request.set(PERIODICITY_ADJUSTMENT, "ACTUAL")
+                request.set(PERIODICITY_SELECTION, "YEARLY")
+                request.set(START_DATE, f"{year}0101")
+                # changed end date to end of the year
+                request.set(END_DATE, f"{year}1231")
+                request.set(NON_TRADING_DAY_FILL_OPTION, "ALL_CALENDAR_DAYS")
+                request.set(NON_TRADING_DAY_FILL_METHOD, "PREVIOUS_VALUE")
                 request.append(SECURITIES, ticker)
-            for field in fields:
-                request.append(FIELDS, field)
+                for field in fields:
+                    #print(field)
+                    request.append(FIELDS, field)
 
-            session.sendRequest(request)
+                session.sendRequest(request)
 
-            event = event_loop(session)
+                event = event_loop(session)
 
-            # Get the response
-            for msg in event:
-                # check if 'securityData' is present
-                if msg.hasElement('securityData'):
-                    security_data_array = msg.getElement('securityData')
-                else:
-                    print("No security data found")
-                    continue
-                print(security_data_array)
-                for securityData in security_data_array.values():
-                    print(securityData)
-                    ticker = securityData.getElementAsString('security')
-                    field_data = securityData.getElement('fieldData')
+                # Get the response
+                for msg in event:
+                    # check if 'securityData' is present
+                    if msg.hasElement('securityData'):
+                        security_data_array = msg.getElement('securityData')
+                    else:
+                        print("No security data found")
+                        continue
+                    #print(security_data_array)
+                    for securityData in security_data_array.values():
+                        #print(securityData)
+                        ticker = securityData.getElementAsString('security')
+                        field_data = securityData.getElement('fieldData')
 
-                    last_price = fetch_field_data(field_data, 'PX_LAST')
-                    market_cap = fetch_field_data(
-                        field_data, 'CUR_MKT_CAP')
-                    book_value_per_share = fetch_field_data(
-                        field_data, 'BOOK_VAL_PER_SH')
-                    roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
-                    free_cash_flow = fetch_field_data(
-                        field_data, 'CF_FREE_CASH_FLOW')
-                    #industry_sector = get_industry_sector(ticker)
-                    data_row = {
-                        'Year': year,
-                        'Ticker': ticker,
-                        'LastPrice': last_price,
-                        'MarketCap': market_cap,
-                        'BookValuePerShare': book_value_per_share,
-                        'ROE': roe,
-                        'FreeCashFlow': free_cash_flow,
-                        # 'IndustrySector': industry_sector,
-                    }
-                    data_rows.append(data_row)
-                    print(data_row)
+                        last_price = fetch_field_data(field_data, 'PX_LAST')
+                        market_cap = fetch_field_data(
+                            field_data, 'CUR_MKT_CAP')
+                        book_value_per_share = fetch_field_data(
+                            field_data, 'BOOK_VAL_PER_SH')
+                        roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
+                        free_cash_flow = fetch_field_data(
+                            field_data, 'CF_FREE_CASH_FLOW')
+                        #industry_sector = get_industry_sector(ticker)
+                        data_row = {
+                            'Year': year,
+                            'Ticker': ticker,
+                            'LastPrice': last_price,
+                            'MarketCap': market_cap,
+                            'BookValuePerShare': book_value_per_share,
+                            'ROE': roe,
+                            'FreeCashFlow': free_cash_flow,
+                            # 'IndustrySector': industry_sector,
+                        }
+                        data_rows.append(data_row)
+                        print(data_row)
 
         except Exception as exception:
             print(f"Error for {year}: {exception}")
@@ -266,39 +268,37 @@ def get_reference_data(years, members_by_year):
     """
     print("Getting reference data from Bloomberg...")
     data_rows = []
-    for year in years:
-        print(f"Year: {year}")
+    for year in tqdm(years, desc="Years"):
         try:
-            request = ref_data_service.createRequest(
-                "ReferenceDataRequest")
-            for ticker in members_by_year[year]:
+            for ticker in tqdm(members_by_year[year], desc="Tickers"):
+                request = ref_data_service.createRequest(
+                    "ReferenceDataRequest")
                 request.append(SECURITIES, ticker)
-            request.append(FIELDS, "BEST_EPS")
-            request.append(FIELDS, "BEST_PE_RATIO")
-            request.append(FIELDS, "BEST_ROE")
-            overrides = request.getElement(OVERRIDES)
-            override1 = overrides.appendElement()
-            override1.setElement(FIELDID, 'REFERENCE_DATE')
-            override1.setElement(VALUE, f"{year}0105")
+                request.append(FIELDS, "BEST_EPS")
+                request.append(FIELDS, "BEST_PE_RATIO")
+                request.append(FIELDS, "BEST_ROE")
+                overrides = request.getElement(OVERRIDES)
+                override1 = overrides.appendElement()
+                override1.setElement(FIELDID, 'REFERENCE_DATE')
+                override1.setElement(VALUE, f"{year}0105")
 
-            session.sendRequest(request)
-            event = event_loop(session)
+                session.sendRequest(request)
+                event = event_loop(session)
 
-            best_eps = {}
-            best_pe = {}
-            best_roe = {}
+                best_eps = {}
+                best_pe = {}
+                best_roe = {}
 
-            for msg in event:
-                security_data_array = msg.getElement('securityData')
-                for securityData in security_data_array.values():
-                    ticker = securityData.getElementAsString('security')
-                    fieldData = securityData.getElement('fieldData')
-                    best_eps[ticker] = fetch_field_data(fieldData, 'BEST_EPS')
-                    best_pe[ticker] = fetch_field_data(
-                        fieldData, 'BEST_PE_RATIO')
-                    best_roe[ticker] = fetch_field_data(fieldData, 'BEST_ROE')
+                for msg in event:
+                    security_data_array = msg.getElement('securityData')
+                    for securityData in security_data_array.values():
+                        ticker = securityData.getElementAsString('security')
+                        fieldData = securityData.getElement('fieldData')
+                        best_eps[ticker] = fetch_field_data(fieldData, 'BEST_EPS')
+                        best_pe[ticker] = fetch_field_data(
+                            fieldData, 'BEST_PE_RATIO')
+                        best_roe[ticker] = fetch_field_data(fieldData, 'BEST_ROE')
 
-            for ticker in members_by_year[year]:
                 data_row = {
                     'Year': year,
                     'Ticker': ticker,
@@ -307,7 +307,6 @@ def get_reference_data(years, members_by_year):
                     'ForwardROE': best_roe[ticker],
                 }
                 data_rows.append(data_row)
-                print(data_row)
 
         except Exception as exception:
             print(f"Error for {ticker} in {year}: {exception}")
