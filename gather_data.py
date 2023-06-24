@@ -86,12 +86,11 @@ def get_index_members(index, year):
     request = ref_data_service.createRequest("ReferenceDataRequest")
     request.append(SECURITIES, index)
     request.append(FIELDS, "INDX_MEMBERS")
-    request.set(NON_TRADING_DAY_FILL_OPTION, "ALL_CALENDAR_DAYS")
-    request.set(NON_TRADING_DAY_FILL_METHOD, "PREVIOUS_VALUE")
+
     overrides = request.getElement(OVERRIDES)
     override1 = overrides.appendElement()
     override1.setElement(FIELDID, 'REFERENCE_DATE')
-    override1.setElement(VALUE, f"{year}0102")
+    override1.setElement(VALUE, f"{year}0105")
 
     session.sendRequest(request)
 
@@ -151,7 +150,7 @@ def fetch_projections(years, tickers_by_year):
     """
     Fetches the data for BEST_EPS and BEST_PE fields from Bloomberg for the given tickers and year.
     """
-    data_rows = np.ndarray((0, 5))
+    data_rows = []
 
     for year in years:
         print(f"Fetching projections for {year}...")
@@ -160,9 +159,7 @@ def fetch_projections(years, tickers_by_year):
         request.append(FIELDS, "BEST_EPS")
         request.append(FIELDS, "BEST_PE_RATIO")
         request.append(FIELDS, "BEST_ROE")
-        # If not trading day, use previous trading day
-        request.set(NON_TRADING_DAY_FILL_OPTION, "ALL_CALENDAR_DAYS")
-        request.set(NON_TRADING_DAY_FILL_METHOD, "PREVIOUS_VALUE")
+
         overrides = request.getElement(OVERRIDES)
         override1 = overrides.appendElement()
         override1.setElement(FIELDID, 'REFERENCE_DATE')
@@ -200,11 +197,11 @@ def get_historical_data(fields, years, members_by_year):
         try:
             request = ref_data_service.createRequest(
                 "HistoricalDataRequest")
-            request.set(PERIODICITY_ADJUSTMENT, "ACTUAL")
+            request.set(PERIODICITY_ADJUSTMENT, "ANNUAL")
             request.set(PERIODICITY_SELECTION, "YEARLY")
             request.set(START_DATE, f"{year}0102")
             # changed end date to end of the year
-            request.set(END_DATE, f"{year}0110")
+            request.set(END_DATE, f"{year}1231")
             request.set(NON_TRADING_DAY_FILL_OPTION, "ALL_CALENDAR_DAYS")
             request.set(NON_TRADING_DAY_FILL_METHOD, "PREVIOUS_VALUE")
             request.append(SECURITIES, tickers)
@@ -251,7 +248,7 @@ def get_historical_data(fields, years, members_by_year):
                     print(data_row)
 
         except Exception as exception:
-            print(f"Error for {ticker} in {year}: {exception}")
+            print(f"Error for {year}: {exception}")
             continue
 
     fetched_df = pd.DataFrame.from_records(data_rows)
