@@ -199,7 +199,7 @@ def get_historical_data(fields, years, members_by_year):
                 "HistoricalDataRequest")
             request.set(PERIODICITY_ADJUSTMENT, "ANNUAL")
             request.set(PERIODICITY_SELECTION, "YEARLY")
-            request.set(START_DATE, f"{year}0102")
+            request.set(START_DATE, f"{year}0101")
             # changed end date to end of the year
             request.set(END_DATE, f"{year}1231")
             request.set(NON_TRADING_DAY_FILL_OPTION, "ALL_CALENDAR_DAYS")
