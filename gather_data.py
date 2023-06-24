@@ -164,7 +164,7 @@ def fetch_projections(years, tickers_by_year):
         overrides = request.getElement(OVERRIDES)
         override1 = overrides.appendElement()
         override1.setElement(FIELDID, 'REFERENCE_DATE')
-        override1.setElement(VALUE, f"{year}0102")
+        override1.setElement(VALUE, f"{year}1231")
 
         session.sendRequest(request)
         event = event_loop(session)
@@ -191,7 +191,7 @@ def get_historical_data(fields, years, members_by_year):
     Gets historical data from Bloomberg for the given tickers, fields and years.
     """
     print("Getting historical data from Bloomberg...")
-    data_rows = np.ndarray((0, 5))
+    data_rows = []
     for year in tqdm(years, desc="Years"):
         # print(f"Year: {year}")
         tickers = members_by_year[year]
@@ -280,7 +280,7 @@ def get_reference_data(years, members_by_year):
                 overrides = request.getElement(OVERRIDES)
                 override1 = overrides.appendElement()
                 override1.setElement(FIELDID, 'REFERENCE_DATE')
-                override1.setElement(VALUE, f"{year}0105")
+                override1.setElement(VALUE, f"{year}1231")
 
                 session.sendRequest(request)
                 event = event_loop(session)
