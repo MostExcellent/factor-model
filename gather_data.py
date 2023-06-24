@@ -194,14 +194,15 @@ def get_historical_data(fields, years, members_by_year):
     for year in years:
         print(f"Year: {year}")
         tickers = members_by_year[year]
+        #print(tickers)
         try:
             request = ref_data_service.createRequest(
                 "HistoricalDataRequest")
-            request.set(PERIODICITY_ADJUSTMENT, "ACTUAL")
+            #request.set(PERIODICITY_ADJUSTMENT, "ACTUAL")
             request.set(PERIODICITY_SELECTION, "YEARLY")
-            request.set(START_DATE, f"{year}0101")
+            request.set(START_DATE, f"{year}0105")
             # changed end date to end of the year
-            request.set(END_DATE, f"{year}1231")
+            request.set(END_DATE, f"{year}0110")
             request.set(NON_TRADING_DAY_FILL_OPTION, "ALL_CALENDAR_DAYS")
             request.set(NON_TRADING_DAY_FILL_METHOD, "PREVIOUS_VALUE")
             for ticker in tickers:
@@ -219,9 +220,11 @@ def get_historical_data(fields, years, members_by_year):
                 if msg.hasElement('securityData'):
                     security_data_array = msg.getElement('securityData')
                 else:
+                    print("No security data found")
                     continue
-
+                print(security_data_array)
                 for securityData in security_data_array.values():
+                    print(securityData)
                     ticker = securityData.getElementAsString('security')
                     field_data = securityData.getElement('fieldData')
 
