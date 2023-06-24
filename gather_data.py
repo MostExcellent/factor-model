@@ -109,7 +109,6 @@ def get_index_members(index, year):
                     " UW", " US Equity").replace(" UN", " US Equity")
                 members.append(member_string)
 
-    print(f"members: {members[:5]}...")
     return members
 
 
@@ -118,7 +117,7 @@ def get_indx_for_years(years, index=INDEX):
     Gets the index members for the given years.
     """
     index_members_by_year = {}
-    for year in years:
+    for year in tqdm(years, desc="Fetching index members"):
         index_members = get_index_members(index, year)
         index_members_by_year[year] = index_members
     return index_members_by_year
@@ -129,14 +128,12 @@ def get_data(fields, years):
     Gets historical and reference data from Bloomberg for the given tickers, fields and years.
     """
     print("Getting data from Bloomberg...")
-    print("Getting index members...")
     members_by_year = get_indx_for_years(years)
-    print("Getting field data...")
     data_rows = []
-    for year in tqdm(years, desc="Years"):
+    for year in tqdm(years, desc="Getting reference data..."):
         tickers = members_by_year[year]
         try:
-            for ticker in tqdm(tickers, desc="Tickers"):
+            for ticker in tqdm(tickers, desc=f"Tickers for {year}"):
                 request = ref_data_service.createRequest(
                     "ReferenceDataRequest")
                 request.append(SECURITIES, ticker)
