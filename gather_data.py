@@ -197,15 +197,15 @@ def get_historical_data(fields, years, members_by_year):
         try:
             request = ref_data_service.createRequest(
                 "HistoricalDataRequest")
-            request.set(PERIODICITY_ADJUSTMENT, "ANNUAL")
+            request.set(PERIODICITY_ADJUSTMENT, "ACTUAL")
             request.set(PERIODICITY_SELECTION, "YEARLY")
             request.set(START_DATE, f"{year}0101")
             # changed end date to end of the year
             request.set(END_DATE, f"{year}1231")
             request.set(NON_TRADING_DAY_FILL_OPTION, "ALL_CALENDAR_DAYS")
             request.set(NON_TRADING_DAY_FILL_METHOD, "PREVIOUS_VALUE")
-            request.append(SECURITIES, tickers)
-
+            for ticker in tickers:
+                request.append(SECURITIES, ticker)
             for field in fields:
                 request.append(FIELDS, field)
 
