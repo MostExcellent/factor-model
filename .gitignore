@@ -6,3 +6,5 @@
 check_rate_limit.py
 backtest.py
 backtest-gather.py
+gather_yfinance.py
+gather_xbg.py

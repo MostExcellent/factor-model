@@ -18,7 +18,7 @@ INDEX = 'SPX Index'  # S&P 500
 
 # Fields for historical data request
 FIELDS_LIST = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
-               'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW', 'BEST_EPS', 'BEST_PE_RATIO', 'BEST_ROE']
+               'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW', 'BEST_EPS_EST', 'BEST_PE_RATIO', 'OPER_MARGIN', 'PROF_MARGIN',]
 
 YEARS = np.arange(START_YEAR, END_YEAR)  # Sample period
 
@@ -77,7 +77,7 @@ def get_index_members(index, year):
 
     overrides = request.getElement(OVERRIDES)
     override1 = overrides.appendElement()
-    override1.setElement(FIELDID, 'REFERENCE_DATE')
+    override1.setElement(FIELDID, 'END_DATE_OVERRIDE')
     override1.setElement(VALUE, f"{year}0105")
 
     session.sendRequest(request)
@@ -104,58 +104,55 @@ def get_indx_for_years(years, index=INDEX):
     Gets the index members for the given years.
     """
     index_members_by_year = {}
-    for year in tqdm(years, desc="Fetching index members"):
+    for year in years:
         index_members = get_index_members(index, year)
         index_members_by_year[year] = index_members
     return index_members_by_year
 
 
-def get_data(fields, years):
+def get_data(fields, start_year, end_year):
     """
     Gets historical and reference data from Bloomberg for the given tickers, fields and years.
     """
     print("Getting data from Bloomberg...")
-    members_by_year = get_indx_for_years(years)
+    members = get_index_members(INDEX, end_year)
     data_rows = []
-    for year in tqdm(years, desc="Getting reference data..."):
-        tickers = members_by_year[year]
+    for ticker in tqdm(members, desc="Getting data..."):
         try:
-            for ticker in tqdm(tickers, desc=f"Tickers for {year}"):
-                request = ref_data_service.createRequest(
-                    "ReferenceDataRequest")
-                request.append(SECURITIES, ticker)
-                for field in fields:
-                    request.append(FIELDS, field)
+            request = ref_data_service.createRequest(
+                "HistoricalDataRequest")
+            request.set("periodicityAdjustment", "ACTUAL")
+            request.set("periodicitySelection", "YEARLY")
+            request.set("startDate", f"{start_year}0101")
+            request.set("endDate", f"{end_year}0101")
+            request.append(SECURITIES, ticker)
+            for field in fields:
+                request.append(FIELDS, field)
 
-                overrides = request.getElement(OVERRIDES)
-                override1 = overrides.appendElement()
-                override1.setElement(FIELDID, 'REFERENCE_DATE')
-                override1.setElement(VALUE, f"{year}0105")
+            session.sendRequest(request)
 
-                session.sendRequest(request)
+            event = event_loop(session)
 
-                event = event_loop(session)
+            # Get the response
+            for msg in event:
+                # check if 'securityData' is present
+                if msg.hasElement('securityData'):
+                    security_data_array = msg.getElement('securityData')
+                else:
+                    print("No security data found")
+                    continue
+                for security_data in security_data_array.values():
+                    ticker = security_data.getElementAsString('security')
+                    field_data = security_data.getElement('fieldData')
 
-                # Get the response
-                for msg in event:
-                    # check if 'securityData' is present
-                    if msg.hasElement('securityData'):
-                        security_data_array = msg.getElement('securityData')
-                    else:
-                        print("No security data found")
-                        continue
-                    for security_data in security_data_array.values():
-                        ticker = security_data.getElementAsString('security')
-                        field_data = security_data.getElement('fieldData')
-
-                        data_row = {'Year': year, 'Ticker': ticker}
-                        for field in fields:
-                            data_row[field] = fetch_field_data(
-                                field_data, field)
-                        data_rows.append(data_row)
+                    data_row = {'Year': np.arange(start_year, end_year+1), 'Ticker': ticker}
+                    for field in fields:
+                        data_row[field] = fetch_field_data(
+                            field_data, field)
+                    data_rows.append(data_row)
 
         except Exception as exception:
-            print(f"Error for {year}: {exception}")
+            print(f"Error for {ticker}: {exception}")
             continue
 
     fetched_df = pd.DataFrame.from_records(data_rows)
@@ -178,7 +175,7 @@ else:
         exit()
 
     ref_data_service = session.getService("//blp/refdata")
-    data = get_data(FIELDS_LIST, YEARS)
+    data = get_data(FIELDS_LIST, YEARS[0], YEARS[-1])
     # save unprocessed data
     data.to_csv('unprocessed_data.csv', index=False)
 
