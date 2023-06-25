@@ -3,6 +3,7 @@
 import os
 # For timeout
 import time
+from datetime import datetime as dt
 
 # The Bloomberg API
 import blpapi
@@ -18,7 +19,9 @@ INDEX = 'SPX Index'  # S&P 500
 
 # Fields for historical data request
 FIELDS_LIST = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
-               'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW', 'BEST_EPS_EST', 'BEST_PE_RATIO', 'OPER_MARGIN', 'PROF_MARGIN',]
+               'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW',
+               'OPER_MARGIN','PROF_MARGIN', 'IS_EPS', 'PE_RATIO', 'EPS_GROWTH','SALES_GROWTH']# add earnings forecasts
+               # add debt-related fields
 
 YEARS = np.arange(START_YEAR, END_YEAR)  # Sample period
 
@@ -27,6 +30,7 @@ YEARS = np.arange(START_YEAR, END_YEAR)  # Sample period
 SECURITIES = Name('securities')
 FIELDS = Name('fields')
 FIELDID = Name('fieldId')
+FIELDDATA = Name('fieldData')
 VALUE = Name('value')
 OVERRIDES = Name('overrides')
 OVERRIDE = Name('override')
@@ -36,7 +40,7 @@ PERIODICITY_SELECTION = Name('periodicitySelection')
 PERIODICITY_ADJUSTMENT = Name('periodicityAdjustment')
 NON_TRADING_DAY_FILL_OPTION = Name('nonTradingDayFillOption')
 NON_TRADING_DAY_FILL_METHOD = Name('nonTradingDayFillMethod')
-#FIELD_NAMES = [Name(field) for field in FIELDS_LIST]
+# FIELD_NAMES = [Name(field) for field in FIELDS_LIST]
 
 
 def event_loop(e_session, timeout=7000):
@@ -141,11 +145,12 @@ def get_data(fields, start_year, end_year):
                 else:
                     print("No security data found")
                     continue
-                for security_data in security_data_array.values():
-                    ticker = security_data.getElementAsString('security')
-                    field_data = security_data.getElement('fieldData')
-
-                    data_row = {'Year': np.arange(start_year, end_year+1), 'Ticker': ticker}
+                # print(security_data_array)
+                # exit()
+                field_data_array = security_data_array.getElement(FIELDDATA)
+                for field_data in field_data_array.values():
+                    date = field_data.getElementAsDatetime('date')
+                    data_row = {'Date': date, 'Ticker': ticker}
                     for field in fields:
                         data_row[field] = fetch_field_data(
                             field_data, field)
@@ -180,13 +185,13 @@ else:
     data.to_csv('unprocessed_data.csv', index=False)
 
 # Remove duplicate years
-data = data.drop_duplicates(subset=['Year', 'Ticker'], keep='last')
+data = data.drop_duplicates(subset=['Date', 'Ticker'], keep='last')
 
 # Interpolate missing values
 data = data.groupby('Ticker').apply(
     lambda group: group.interpolate(method='linear'))
 # Any values that are still NaN are set to the mean for that year
-data = data.groupby('Year').apply(
+data = data.groupby('Date').apply(
     lambda group: group.fillna(group.mean(numeric_only=True)))
 # Drop any remaining NaNs
 data.dropna(inplace=True)
