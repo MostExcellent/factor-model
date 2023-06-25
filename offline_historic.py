@@ -247,12 +247,13 @@ df['LogReturn'] = np.log(df['ForwardReturn'] + 1)
 df['LogReturnNorm'] = df.groupby('Date')['LogReturn'].transform(normalize)
 
 df_grouped = process_factors(df)
-factors = [col[:-4] for col in df_grouped.columns if col.endswith('Norm')]
-print(df_grouped[factors + ['ForwardReturnNorm']].isnull().sum())
+# factors = [col[:-4] for col in df_grouped.columns if col.endswith('Norm') and col != 'LogReturnNorm']
+# print(df_grouped[factors + ['LogReturnsNorm']].isnull().sum())
 df_grouped.reset_index(drop=True, inplace=True)
 
-features = [col for col in df_grouped.columns if col.endswith('Norm')]
 target = 'LogReturnNorm'
+features = [col for col in df_grouped.columns if col.endswith('Norm') and col != target]
+
 #target = 'LogReturn'
 
 # print number of nans in a column if it has any

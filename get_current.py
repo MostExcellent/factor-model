@@ -10,8 +10,9 @@ from blpapi import Name
 from dateutil.relativedelta import relativedelta
 
 INDEX = "SPX Index"  # S&P 500 Index
-FIELDS_LIST = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH', 'RETURN_COM_EQY',
-               'CF_FREE_CASH_FLOW', 'BEST_EPS', 'BEST_PE_RATIO', 'BEST_ROE', 'INDUSTRY_SECTOR']
+FIELDS_LIST = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
+               'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW',
+               'OPER_MARGIN','PROF_MARGIN', 'IS_EPS', 'PE_RATIO', 'EPS_GROWTH','SALES_GROWTH']
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -126,13 +127,11 @@ def get_previous_year_data(ticker, date=current_date - relativedelta(years=1)):
     """
     Gets the last year's price for the given ticker and year.
     """
-    request = ref_data_service.createRequest("ReferenceDataRequest")
-    request.append(SECURITIES, ticker)
-    request.append(FIELDS, "PX_LAST")
-    overrides = request.getElement(OVERRIDES)
-    override1 = overrides.appendElement()
-    override1.setElement(FIELDID, 'REFERENCE_DATE')
-    override1.setElement(VALUE, date.strftime("%Y%m%d"))
+    request = ref_data_service.createRequest("HistoricalDataRequest")
+    request.set("securities", ticker)
+    request.set("fields", "PX_LAST")
+    request.set("startDate", (date - relativedelta(years=1)).strftime("%Y%m%d"))
+    request.set("endDate", date.strftime("%Y%m%d"))
 
     session.sendRequest(request)
 
@@ -141,39 +140,11 @@ def get_previous_year_data(ticker, date=current_date - relativedelta(years=1)):
     # Get the response
     last_price = np.nan
     for msg in event:
-        securityDataArray = msg.getElement('securityData')
-        for securityData in securityDataArray.values():
-            if securityData.hasElement('fieldExceptions'):
-                if securityData.getElement('fieldExceptions').numValues() > 0:
-                    continue
-            fieldData = securityData.getElement('fieldData')
-            last_price = fetch_field_data(fieldData, 'PX_LAST')
+        if msg.messageType() == "HistoricalDataResponse":
+            for fieldData in msg.getElement("securityData").getElement("fieldData").values():
+                last_price = fetch_field_data(fieldData, "PX_LAST")
 
     return last_price
-
-
-def get_industry_sector(ticker):
-    """
-    Gets the industry sector for the given ticker.
-    """
-    request = ref_data_service.createRequest("ReferenceDataRequest")
-    request.append(SECURITIES, ticker)
-    request.append(FIELDS, "INDUSTRY_SECTOR")
-
-    session.sendRequest(request)
-
-    event = event_loop(session)
-
-    industry_sector = np.nan
-    for msg in event:
-        securityDataArray = msg.getElement('securityData')
-        for securityData in securityDataArray.values():
-            fieldData = securityData.getElement('fieldData')
-            if fieldData.hasElement('INDUSTRY_SECTOR'):
-                industry_sector = fieldData.getElementAsString(
-                    'INDUSTRY_SECTOR')
-
-    return industry_sector
 
 
 def get_current_data(tickers, fields=FIELDS_LIST, date=current_date):
@@ -206,39 +177,17 @@ def get_current_data(tickers, fields=FIELDS_LIST, date=current_date):
                             'fieldExceptions')
                         if field_exceptions.numValues() > 0:
                             continue
-
+                    
                     field_data = securityData.getElement('fieldData')
-                    last_price = fetch_field_data(field_data, 'PX_LAST')
+                    data_row = {'Date':field_data.getElementAsDatetime('date'), 'Ticker':ticker}
                     previous_year_price = get_previous_year_data(ticker, date)
-                    market_cap = fetch_field_data(field_data, 'CUR_MKT_CAP')
-                    book_value_per_share = fetch_field_data(
-                        field_data, 'BOOK_VAL_PER_SH')
-                    roe = fetch_field_data(field_data, 'RETURN_COM_EQY')
-                    free_cash_flow = fetch_field_data(
-                        field_data, 'CF_FREE_CASH_FLOW')
-                    best_eps = fetch_field_data(field_data, 'BEST_EPS')
-                    best_pe_ratio = fetch_field_data(
-                        field_data, 'BEST_PE_RATIO')
-                    best_roe = fetch_field_data(field_data, 'BEST_ROE')
-                    #industry_sector = get_industry_sector(ticker)
-
-                    yearly_return = ((last_price - previous_year_price) /
+                    for field in fields:
+                        data_row[field] = fetch_field_data(field_data, field)
+                    yearly_return = ((data_row['PX_LAST'] - previous_year_price) /
                                      previous_year_price) if previous_year_price else np.nan
-
-                    data_rows.append({
-                        'Ticker': ticker,
-                        'LastPrice': last_price,
-                        'PreviousYearPrice': previous_year_price,
-                        'YearlyReturn': yearly_return,
-                        'MarketCap': market_cap,
-                        'BookValuePerShare': book_value_per_share,
-                        'ROE': roe,
-                        'FreeCashFlow': free_cash_flow,
-                        'ForwardEPS': best_eps,
-                        'ForwardPE': best_pe_ratio,
-                        'ForwardROE': best_roe,
-                        # 'IndustrySector': industry_sector,
-                    })
+                    data_row['LAST_CHANGE'] = yearly_return
+                    
+                    data_rows.append(data_row)
 
     return pd.DataFrame(data_rows)
 
