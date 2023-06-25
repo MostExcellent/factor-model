@@ -8,11 +8,12 @@ import numpy as np
 import pandas as pd
 from blpapi import Name
 from dateutil.relativedelta import relativedelta
+from tqdm import tqdm
 
 INDEX = "SPX Index"  # S&P 500 Index
-FIELDS_LIST = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
+FIELDS_LIST = ['PX_LAST', 'HIST_TRR_PREV_1YR', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
                'RETURN_COM_EQY', 'CF_FREE_CASH_FLOW',
-               'OPER_MARGIN','PROF_MARGIN', 'IS_EPS', 'PE_RATIO', 'EPS_GROWTH','SALES_GROWTH']
+               'OPER_MARGIN', 'PROF_MARGIN', 'IS_EPS', 'PE_RATIO', 'EPS_GROWTH', 'SALES_GROWTH']
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -76,7 +77,8 @@ def event_loop(e_session, timeout=7000):
         event = e_session.nextEvent(timeout)
         # type: ignore
         # type: ignore
-        if event.eventType() in [blpapi.Event.PARTIAL_RESPONSE, blpapi.Event.RESPONSE]: # type: ignore
+        # type: ignore
+        if event.eventType() in [blpapi.Event.PARTIAL_RESPONSE, blpapi.Event.RESPONSE]:
             break
         if time.time() > deadline:
             break
@@ -123,38 +125,13 @@ def get_index_members(index, date=current_date):
     return members
 
 
-def get_previous_year_data(ticker, date=current_date - relativedelta(years=1)):
-    """
-    Gets the last year's price for the given ticker and year.
-    """
-    request = ref_data_service.createRequest("HistoricalDataRequest")
-    request.set("securities", ticker)
-    request.set("fields", "PX_LAST")
-    request.set("startDate", (date - relativedelta(years=1)).strftime("%Y%m%d"))
-    request.set("endDate", date.strftime("%Y%m%d"))
-
-    session.sendRequest(request)
-
-    event = event_loop(session)
-
-    # Get the response
-    last_price = np.nan
-    for msg in event:
-        if msg.messageType() == "HistoricalDataResponse":
-            for fieldData in msg.getElement("securityData").getElement("fieldData").values():
-                last_price = fetch_field_data(fieldData, "PX_LAST")
-
-    return last_price
-
-
 def get_current_data(tickers, fields=FIELDS_LIST, date=current_date):
     """
     Gets current data for the given tickers.
     """
 
     data_rows = []
-    for ticker in tickers:
-        print(ticker)
+    for ticker in tqdm(tickers, desc='Fetching data'):
         request = ref_data_service.createRequest("ReferenceDataRequest")
         request.append(SECURITIES, ticker)
         for field in fields:
@@ -177,16 +154,12 @@ def get_current_data(tickers, fields=FIELDS_LIST, date=current_date):
                             'fieldExceptions')
                         if field_exceptions.numValues() > 0:
                             continue
-                    
+
                     field_data = securityData.getElement('fieldData')
-                    data_row = {'Date':field_data.getElementAsDatetime('date'), 'Ticker':ticker}
-                    previous_year_price = get_previous_year_data(ticker, date)
+                    data_row = {'Ticker': ticker}
                     for field in fields:
                         data_row[field] = fetch_field_data(field_data, field)
-                    yearly_return = ((data_row['PX_LAST'] - previous_year_price) /
-                                     previous_year_price) if previous_year_price else np.nan
-                    data_row['LAST_CHANGE'] = yearly_return
-                    
+
                     data_rows.append(data_row)
 
     return pd.DataFrame(data_rows)
@@ -196,5 +169,10 @@ to_get = tickers + get_index_members(INDEX)
 
 # Get data for all tickers and fields
 df = get_current_data(list(set(to_get)))
+
+# Impute missing values by filling with mean
+df_numeric = df.select_dtypes(include='number')
+df_imputed = df_numeric.fillna(df_numeric.mean())
+df[df_imputed.columns] = df_imputed
 
 df.to_csv('current_data.csv', index=False)  # Save data to CSV file

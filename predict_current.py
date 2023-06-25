@@ -2,6 +2,7 @@ import os
 import pickle
 
 import pandas as pd
+from offline_historic import RFEnsemble # Custom class for ensemble predictions
 
 
 def normalize(x):
@@ -13,42 +14,25 @@ def normalize(x):
         return (x - x.mean()) / x.std()
 
 
-# def process_factors(df):
-#     """Process the factors"""
-#     df_copy = df.copy()
-#     df_copy['Momentum'] = df_copy['LastPrice'] / \
-#         df_copy['PreviousYearPrice'] - 1
-#     df_copy['Size'] = df_copy['MarketCap']
-#     df_copy['Value'] = df_copy['BookValuePerShare'] / df_copy['LastPrice']
-#     df_copy['Profitability'] = df_copy['ROE']
-#     df_copy['Investment'] = df_copy['FreeCashFlow'] / df_copy['MarketCap']
-#     df_copy['MomentumNorm'] = normalize(df_copy['Momentum'])
-#     df_copy['SizeNorm'] = normalize(df_copy['Size'])
-#     df_copy['ValueNorm'] = normalize(df_copy['Value'])
-#     df_copy['ProfitabilityNorm'] = normalize(df_copy['Profitability'])
-#     df_copy['InvestmentNorm'] = normalize(df_copy['Investment'])
-#     return df_copy
-
 def process_factors(df):
     """
     Process factors for a given pandas dataframe by creating new columns for each factor,
-    normalizing each factor within each year, and returning a copy of the dataframe with the new columns.
+    normalizing each factor, and returning a copy of the dataframe with the new columns.
     """
     print("Processing factors...")
     df_copy = df.copy()
 
     # shift returns back one year
-    df_copy['Momentum'] = df_copy.groupby(
-        'Ticker')['ForwardReturn'].transform(lambda x: x.shift(1))
+    df_copy['Momentum'] = (df_copy['PX_LAST'] - df_copy['HIST_TRR_PREV_1YR'])/df_copy['PX_LAST'] - 1
     df_copy['Size'] = df_copy['CUR_MKT_CAP']
     df_copy['Value'] = df_copy['BOOK_VAL_PER_SH'] / df_copy['PX_LAST']
     df_copy['ROE'] = df_copy['RETURN_COM_EQY']
     df_copy['FCF'] = df_copy['CF_FREE_CASH_FLOW'] / df_copy['CUR_MKT_CAP']
 
-    # Normalize within each year
-    for col in ['Momentum', 'Size', 'Value', 'ROE', 'FCF', 'IS_EPS', 'PE_RATIO', 'EPS_GROWTH', 'SALES_GROWTH', 'OPER_MARGIN', 'PROF_MARGIN']:
-        df_copy[f'{col}Norm'] = df_copy.groupby(
-            ['Date'])[col].transform(normalize)
+    raw_features = ['Momentum', 'Size', 'Value', 'ROE', 'FCF', 'IS_EPS', 'PE_RATIO', 'EPS_GROWTH', 'SALES_GROWTH', 'OPER_MARGIN', 'PROF_MARGIN']
+    # Normalize each factor
+    for col in raw_features:
+        df_copy[f'{col}Norm'] = normalize(df_copy[col])
         
     df_copy = df_copy.dropna()    
     return df_copy
@@ -73,25 +57,15 @@ df = pd.read_csv(csv_file)
 df = process_factors(df)
 
 # Define features
-features = ['MomentumNorm', 'SizeNorm', 'ValueNorm',
-            'ProfitabilityNorm', 'InvestmentNorm']
-
-# Check if any features are missing
-missing_features = [
-    feature for feature in features if feature not in df.columns]
-if missing_features:
-    print(f"Missing features in data: {missing_features}. Exiting...")
-    exit()
+features = features = [col for col in df.columns if col.endswith('Norm')]
 
 # Load the model
-with open(model_file, 'rb') as file:
-    model = pickle.load(file)
+print("Loading model...")
+model = RFEnsemble().load(model_file)
 
 # Make predictions
-scores = []
-for forest in model:
-    scores.append(forest.predict(df[features]))
-df['Score'] = sum(scores) / len(scores)
+scores = model.predict(df[features])
+df['Score'] = scores
 df = df.sort_values('Score', ascending=False)
 # Save the data with the predictions
 df.to_csv('scored_data.csv', index=False)

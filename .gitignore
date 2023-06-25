@@ -8,3 +8,4 @@ backtest.py
 backtest-gather.py
 gather_yfinance.py
 gather_xbg.py
+__pycache__/
