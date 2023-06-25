@@ -48,15 +48,12 @@ def process_factors(df):
     df_copy['Size'] = df_copy['CUR_MKT_CAP']
     df_copy['Value'] = df_copy['BOOK_VAL_PER_SH'] / df_copy['PX_LAST']
     df_copy['ROE'] = df_copy['RETURN_COM_EQY']
-    df_copy['ForwardROE'] = df_copy['BEST_ROE']
     df_copy['FCF'] = df_copy['CF_FREE_CASH_FLOW'] / df_copy['CUR_MKT_CAP']
-    df_copy['ForwardEarnings'] = df_copy['BEST_EPS']
-    df_copy['ForwardPE'] = df_copy['BEST_PE_RATIO']
 
     # Normalize within each year
-    for col in ['Momentum', 'Size', 'Value', 'ROE', 'ForwardROE', 'FCF', 'ForwardEarnings', 'ForwardPE']:
+    for col in ['Momentum', 'Size', 'Value', 'ROE', 'FCF', 'IS_EPS', 'PE_RATIO', 'EPS_GROWTH', 'SALES_GROWTH', 'OPER_MARGIN', 'PROF_MARGIN']:
         df_copy[f'{col}Norm'] = df_copy.groupby(
-            ['Year'])[col].transform(normalize)
+            ['Date'])[col].transform(normalize)
         
     df_copy = df_copy.dropna()    
     return df_copy
@@ -105,7 +102,7 @@ class RFEnsemble:
                 'max_depth': [None, 10, 20, 30],
                 'min_samples_split': [2, 5, 10],
                 'min_samples_leaf': [1, 2, 4],
-                'max_features': ['auto', 'sqrt']
+                'max_features': ['sqrt']
             }
 
             self.optimize_params(x_train, y_train, param_grid=param_grid)
@@ -221,7 +218,7 @@ def clean_data(df):
     Apply cap_and_floor function to specified columns in the given dataframe.
     """
     for col in df.select_dtypes(include=np.number).columns:
-        if col != 'Year':
+        if col != 'Date':
             df = cap_and_floor(df, col, 0.01, 0.99)
     return df
 
@@ -232,17 +229,22 @@ if os.path.isfile(csv_file):
 else:
     print(f"File {csv_file} not found. Exiting...")
     exit()
-
-df.sort_values(by=['Ticker', 'Year'], inplace=True)
-df['ForwardReturn'] = df.groupby('Ticker')['PX_LAST'].pct_change(-1)
-print(df.head())
+# Convert date column to year
+# df['Year'] = pd.to_datetime(df['Date']).dt.year
+# print(df['Year'].values)
+# df.drop('Date', axis=1, inplace=True)
+df.sort_values(by=['Ticker'], inplace=True, ascending=False)
+df.sort_values(by=['Date'], inplace=True, ascending=True)
+df['ForwardReturn'] = df.groupby('Ticker')['PX_LAST'].pct_change(1)
+df['ForwardReturn'] = df.groupby('Ticker')['ForwardReturn'].shift(-1)
+# print(df.head())
 df.dropna(subset=['ForwardReturn'], inplace=True)
-df['ForwardReturnNorm'] = df.groupby('Year')['ForwardReturn'].transform(normalize)
+# df['ForwardReturnNorm'] = df.groupby('Date')['ForwardReturn'].transform(normalize)
 
 # Log returns
 df['LogReturn'] = np.log(df['ForwardReturn'] + 1)
 # df.dropna(subset=['LogReturn', 'ForwardReturn'], inplace=True)
-df['LogReturnNorm'] = df.groupby('Year')['LogReturn'].transform(normalize)
+df['LogReturnNorm'] = df.groupby('Date')['LogReturn'].transform(normalize)
 
 df_grouped = process_factors(df)
 factors = [col[:-4] for col in df_grouped.columns if col.endswith('Norm')]
