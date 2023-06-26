@@ -40,7 +40,6 @@ PERIODICITY_SELECTION = Name('periodicitySelection')
 PERIODICITY_ADJUSTMENT = Name('periodicityAdjustment')
 NON_TRADING_DAY_FILL_OPTION = Name('nonTradingDayFillOption')
 NON_TRADING_DAY_FILL_METHOD = Name('nonTradingDayFillMethod')
-# FIELD_NAMES = [Name(field) for field in FIELDS_LIST]
 
 
 def event_loop(e_session, timeout=7000):
