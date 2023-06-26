@@ -89,7 +89,7 @@ class RFEnsemble:
                 'max_depth': [None, 10, 20, 30],
                 'min_samples_split': [2, 5, 10],
                 'min_samples_leaf': [1, 2, 4],
-                'max_features': ['auto', 'sqrt']
+                'max_features': [1.0, 'sqrt']
             }
         optimizer = method(estimator=RandomForestRegressor(),
                            param_grid=param_grid, cv=3, n_jobs=-1, verbose=2)
@@ -111,7 +111,7 @@ class RFEnsemble:
                 'max_depth': [None, 10, 20, 30],
                 'min_samples_split': [2, 5, 10],
                 'min_samples_leaf': [1, 2, 4],
-                'max_features': ['sqrt']
+                'max_features': [1.0, 'sqrt']
             }
 
             self.optimize_params(x_train, y_train, param_grid=param_grid)
