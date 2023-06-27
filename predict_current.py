@@ -39,6 +39,7 @@ def process_factors(df):
 
 csv_file = 'current_data.csv'
 model_file = 'ensemble.pkl'
+eps_model_file = 'earnings_ensemble.pkl'
 
 # Check if the file exists
 if not os.path.isfile(csv_file):
@@ -48,6 +49,10 @@ if not os.path.isfile(csv_file):
 # Check if the model exists
 if not os.path.isfile(model_file):
     print(f"Model file {model_file} not found. Exiting...")
+    exit()
+
+if not os.path.isfile(eps_model_file):
+    print(f"Model file {eps_model_file} not found. Exiting...")
     exit()
 
 # Load the data
@@ -62,9 +67,12 @@ features = features = [col for col in df.columns if col.endswith('Norm')]
 # Load the model
 print("Loading model...")
 model = RFEnsemble().load(model_file)
+eps_model = RFEnsemble().load(eps_model_file)
 
 # Make predictions
 scores = model.predict(df[features])
+forward_eps = eps_model.predict(df[features])
+df['ForwardEPS'] = forward_eps
 df['Score'] = scores
 df = df.sort_values('Score', ascending=False)
 # Save the data with the predictions
