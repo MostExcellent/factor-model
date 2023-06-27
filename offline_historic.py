@@ -144,9 +144,9 @@ class RFEnsemble:
         Test the trained random forest ensemble on the given test data.
         """
         y_pred = self.predict(x_test)
-        mse = mean_squared_error(y_test, y_pred)
+        rmse = mean_squared_error(y_test, y_pred, squared=False)
         r2 = r2_score(y_test, y_pred)
-        return y_pred, mse, r2
+        return y_pred, rmse, r2
 
     def save(self, filename="ensemble.pkl"):
         """
@@ -162,6 +162,7 @@ class RFEnsemble:
         """
         with open(filename, "rb") as f:
             return pickle.load(f)
+
 
 class LinearModel:
     """
@@ -186,9 +187,9 @@ class LinearModel:
         Test the trained linear regression model on the given test data and return the mean squared error and R-squared.
         """
         y_pred = self.predict(X)
-        mse = mean_squared_error(y, y_pred)
+        rmse = mean_squared_error(y, y_pred, squared=False)
         r2 = r2_score(y, y_pred)
-        return mse, r2
+        return rmse, r2
 
 
 class NaiveModel:
@@ -213,9 +214,9 @@ class NaiveModel:
         Test the naive model on the given test data and return the mean squared error and R-squared.
         """
         y_pred = self.predict(x)
-        mse = mean_squared_error(y, y_pred)
+        rmse = mean_squared_error(y, y_pred, squared=False)
         r2 = r2_score(y, y_pred)
-        return mse, r2
+        return rmse, r2
 
 
 csv_file = 'processed_data.csv'
@@ -285,34 +286,34 @@ if __name__ == "__main__":
     model = RFEnsemble()
     print(type(model))
     model.train(x_train, y_train)
-    y_pred, mse, r2 = model.test(x_test, y_test)
+    y_pred, rmse, r2 = model.test(x_test, y_test)
 
     model.save('ensemble.pkl')
 
     model_params = model.params
 
-    print("MSE: ", mse)
+    print("RMSE: ", rmse)
     print("R2: ", r2)
 
     linear_model = LinearModel()
     linear_model.fit(x_train.values, y_train.values)
     y_pred_linear = linear_model.predict(x_test)
-    mse_linear, r2_linear = linear_model.test(x_test, y_test)
-    print("Linear MSE: ", mse_linear)
+    rmse_linear, r2_linear = linear_model.test(x_test, y_test)
+    print("Linear RMSE: ", rmse_linear)
     print("Linear R2: ", r2_linear)
 
     naive_model = NaiveModel()
     naive_model.fit(y_train)
-    mse_naive, r2_naive = naive_model.test(x_test, y_test)
-    print("Naive MSE: ", mse_naive)
+    rmse_naive, r2_naive = naive_model.test(x_test, y_test)
+    print("Naive RMSE: ", rmse_naive)
     print("Naive R2: ", r2_naive)
 
     with open('initial_test_results.txt', 'w') as file:
-        file.write(f"MSE: {mse}\n")
+        file.write(f"RMSE: {rmse}\n")
         file.write(f"R2: {r2}\n")
-        file.write(f"Linear MSE: {mse_linear}\n")
+        file.write(f"Linear RMSE: {rmse_linear}\n")
         file.write(f"Linear R2: {r2_linear}\n")
-        file.write(f"Naive MSE: {mse_naive}\n")
+        file.write(f"Naive RMSE: {rmse_naive}\n")
         file.write(f"Naive R2: {r2_naive}\n")
         file.close()
 
@@ -370,17 +371,17 @@ if __name__ == "__main__":
 
     residuals = []
     feature_importances = []
-    mse_vals = []
+    rmse_vals = []
     r2_vals = []
 
     # Linear model
     linear_residuals = []
-    linear_mse_vals = []
+    linear_rmse_vals = []
     linear_r2_vals = []
 
     # Naive model
     naive_residuals = []
-    naive_mse_vals = []
+    naive_rmse_vals = []
     naive_r2_vals = []
 
     # Split data into train and test sets
@@ -402,7 +403,7 @@ if __name__ == "__main__":
         ensemble = RFEnsemble(num_models=5, params=model_params)
         ensemble.train(x_sample, y_sample)
         y_pred = ensemble.predict(x_test)
-        mse = mean_squared_error(y_test, y_pred)
+        rmse = mean_squared_error(y_test, y_pred, squared=False)
         r2 = r2_score(y_test, y_pred)
 
         linear = LinearModel()
@@ -416,21 +417,21 @@ if __name__ == "__main__":
         # Record the results
         feature_importances.append(ensemble.feature_importances)
         residuals.append(y_test - y_pred)
-        mse_vals.append(mse)
+        rmse_vals.append(rmse)
         r2_vals.append(r2)
 
         # Linear model results
         linear_residuals.append(y_test - y_pred_linear)
-        linear_mse = mean_squared_error(y_test, y_pred_linear)
+        linear_rmse = mean_squared_error(y_test, y_pred_linear, squared=False)
         linear_r2 = r2_score(y_test, y_pred_linear)
-        linear_mse_vals.append(linear_mse)
+        linear_rmse_vals.append(linear_rmse)
         linear_r2_vals.append(linear_r2)
 
         # Naive model results
         naive_residuals.append(y_test - y_pred_naive)
-        naive_mse = mean_squared_error(y_test, y_pred_naive)
+        naive_rmse = mean_squared_error(y_test, y_pred_naive, squared=False)
         naive_r2 = r2_score(y_test, y_pred_naive)
-        naive_mse_vals.append(naive_mse)
+        naive_rmse_vals.append(naive_rmse)
         naive_r2_vals.append(naive_r2)
 
     # Now we can calculate the confidence intervals
@@ -449,9 +450,9 @@ if __name__ == "__main__":
     residuals_lower = np.percentile(residuals, ((1 - confidence_level) / 2) * 100)
     residuals_upper = np.percentile(
         residuals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
-    mse_lower = np.percentile(mse_vals, ((1 - confidence_level) / 2) * 100)
-    mse_upper = np.percentile(
-        mse_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+    rmse_lower = np.percentile(rmse_vals, ((1 - confidence_level) / 2) * 100)
+    rmse_upper = np.percentile(
+        rmse_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
     r2_lower = np.percentile(r2_vals, ((1 - confidence_level) / 2) * 100)
     r2_upper = np.percentile(
         r2_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
@@ -460,10 +461,10 @@ if __name__ == "__main__":
         linear_residuals, ((1 - confidence_level) / 2) * 100)
     linear_residuals_upper = np.percentile(
         linear_residuals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
-    linear_mse_lower = np.percentile(
-        linear_mse_vals, ((1 - confidence_level) / 2) * 100)
-    linear_mse_upper = np.percentile(
-        linear_mse_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+    linear_rmse_lower = np.percentile(
+        linear_rmse_vals, ((1 - confidence_level) / 2) * 100)
+    linear_rmse_upper = np.percentile(
+        linear_rmse_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
     linear_r2_lower = np.percentile(
         linear_r2_vals, ((1 - confidence_level) / 2) * 100)
     linear_r2_upper = np.percentile(
@@ -473,28 +474,28 @@ if __name__ == "__main__":
         naive_residuals, ((1 - confidence_level) / 2) * 100)
     naive_residuals_upper = np.percentile(
         naive_residuals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
-    naive_mse_lower = np.percentile(
-        naive_mse_vals, ((1 - confidence_level) / 2) * 100)
-    naive_mse_upper = np.percentile(
-        naive_mse_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
+    naive_rmse_lower = np.percentile(
+        naive_rmse_vals, ((1 - confidence_level) / 2) * 100)
+    naive_rmse_upper = np.percentile(
+        naive_rmse_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
     naive_r2_lower = np.percentile(
         naive_r2_vals, ((1 - confidence_level) / 2) * 100)
     naive_r2_upper = np.percentile(
         naive_r2_vals, (confidence_level + ((1 - confidence_level) / 2)) * 100)
 
     print(f"{confidence_level*100}% confidence interval for naive model residuals: ({naive_residuals_lower}, {naive_residuals_upper})")
-    print(f"{confidence_level*100}% confidence interval for naive model MSE: ({naive_mse_lower}, {naive_mse_upper})")
+    print(f"{confidence_level*100}% confidence interval for naive model RMSE: ({naive_rmse_lower}, {naive_rmse_upper})")
     print(f"{confidence_level*100}% confidence interval for naive model R^2: ({naive_r2_lower}, {naive_r2_upper})")
 
     print(f"{confidence_level*100}% confidence interval for linear model residuals: ({linear_residuals_lower}, {linear_residuals_upper})")
-    print(f"{confidence_level*100}% confidence interval for linear model MSE: ({linear_mse_lower}, {linear_mse_upper})")
+    print(f"{confidence_level*100}% confidence interval for linear model RMSE: ({linear_rmse_lower}, {linear_rmse_upper})")
     print(f"{confidence_level*100}% confidence interval for linear model R^2: ({linear_r2_lower}, {linear_r2_upper})")
 
     for i, (lower, upper) in enumerate(feature_confidence_intervals):
         print(f"{confidence_level*100}% confidence interval for feature {i}'s importance: ({lower}, {upper})")
 
     print(f"{confidence_level*100}% confidence interval for residuals: ({residuals_lower}, {residuals_upper})")
-    print(f"{confidence_level*100}% confidence interval for MSE: ({mse_lower}, {mse_upper})")
+    print(f"{confidence_level*100}% confidence interval for RMSE: ({rmse_lower}, {rmse_upper})")
     print(f"{confidence_level*100}% confidence interval for R^2: ({r2_lower}, {r2_upper})")
 
     with open('bootstrap_test_results.txt', 'w') as file:
@@ -502,18 +503,18 @@ if __name__ == "__main__":
             f"Feature confidence intervals: {feature_confidence_intervals}\n")
         file.write(
             f"Residuals confidence interval: ({residuals_lower}, {residuals_upper})\n")
-        file.write(f"MSE confidence interval: ({mse_lower}, {mse_upper})\n")
+        file.write(f"RMSE confidence interval: ({rmse_lower}, {rmse_upper})\n")
         file.write(f"R2 confidence interval: ({r2_lower}, {r2_upper})\n")
         file.write(
             f"Linear residuals confidence interval: ({linear_residuals_lower}, {linear_residuals_upper})\n")
         file.write(
-            f"Linear MSE confidence interval: ({linear_mse_lower}, {linear_mse_upper})\n")
+            f"Linear RMSE confidence interval: ({linear_rmse_lower}, {linear_rmse_upper})\n")
         file.write(
             f"Linear R2 confidence interval: ({linear_r2_lower}, {linear_r2_upper})\n")
         file.write(
             f"Naive residuals confidence interval: ({naive_residuals_lower}, {naive_residuals_upper})\n")
         file.write(
-            f"Naive MSE confidence interval: ({naive_mse_lower}, {naive_mse_upper})\n")
+            f"Naive RMSE confidence interval: ({naive_rmse_lower}, {naive_rmse_upper})\n")
         file.write(
             f"Naive R2 confidence interval: ({naive_r2_lower}, {naive_r2_upper})\n")
         file.close()

@@ -67,14 +67,6 @@ def process_factors(df):
     df_copy = df_copy.dropna()    
     return df_copy
 
-
-from sklearn.metrics import mean_squared_error, r2_score
-import numpy as np
-import pickle
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import GridSearchCV
-
-
 class RFEnsemble:
     """
     Random forest ensemble class with hyperparameter tuning, training, and prediction methods.
@@ -151,7 +143,7 @@ class RFEnsemble:
         Test the trained random forest ensemble on the given test data.
         """
         y_pred = self.predict(x_test)
-        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+        rmse = mean_squared_error(y_test, y_pred, squared=False)
         r2 = r2_score(y_test, y_pred)
         return y_pred, rmse, r2
 
@@ -194,7 +186,7 @@ class LinearModel:
         Test the trained linear regression model on the given test data and return the mean squared error and R-squared.
         """
         y_pred = self.predict(X)
-        rmse = np.sqrt(mean_squared_error(y, y_pred))
+        rmse = mean_squared_error(y, y_pred, squared=False)
         r2 = r2_score(y, y_pred)
         return rmse, r2
 
@@ -221,7 +213,7 @@ class NaiveModel:
         Test the naive model on the given test data and return the mean squared error and R-squared.
         """
         y_pred = self.predict(x)
-        rmse = np.sqrt(mean_squared_error(y, y_pred))
+        rmse = mean_squared_error(y, y_pred, squared=False)
         r2 = r2_score(y, y_pred)
         return rmse, r2
 
@@ -414,7 +406,7 @@ if __name__ == "__main__":
         ensemble = RFEnsemble(num_models=5, params=model_params)
         ensemble.train(x_sample, y_sample)
         y_pred = ensemble.predict(x_test)
-        rmse = mean_squared_error(y_test, y_pred)
+        rmse = mean_squared_error(y_test, y_pred, squared=False)
         r2 = r2_score(y_test, y_pred)
 
         linear = LinearModel()
@@ -433,14 +425,14 @@ if __name__ == "__main__":
 
         # Linear model results
         linear_residuals.append(y_test - y_pred_linear)
-        linear_mse = mean_squared_error(y_test, y_pred_linear)
+        linear_mse = mean_squared_error(y_test, y_pred_linear, squared=False)
         linear_r2 = r2_score(y_test, y_pred_linear)
         linear_rmse_vals.append(linear_mse)
         linear_r2_vals.append(linear_r2)
 
         # Naive model results
         naive_residuals.append(y_test - y_pred_naive)
-        naive_mse = mean_squared_error(y_test, y_pred_naive)
+        naive_mse = mean_squared_error(y_test, y_pred_naive, squared=False)
         naive_r2 = r2_score(y_test, y_pred_naive)
         naive_rmse_vals.append(naive_mse)
         naive_r2_vals.append(naive_r2)
