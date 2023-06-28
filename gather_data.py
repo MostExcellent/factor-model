@@ -16,6 +16,7 @@ from tqdm import tqdm
 START_YEAR = 2010
 END_YEAR = 2021
 INDEX = 'SPX Index'  # S&P 500
+PERIODICITY = 'QUARTERLY'
 
 # Fields for historical data request
 FIELDS_LIST = ['PX_LAST', 'CUR_MKT_CAP', 'BOOK_VAL_PER_SH',
@@ -113,7 +114,7 @@ def get_indx_for_years(years, index=INDEX):
     return index_members_by_year
 
 
-def get_data(fields, start_year, end_year):
+def get_data(fields, start_year, end_year, periodicity=PERIODICITY):
     """
     Gets historical and reference data from Bloomberg for the given tickers, fields and years.
     """
@@ -125,9 +126,9 @@ def get_data(fields, start_year, end_year):
             request = ref_data_service.createRequest(
                 "HistoricalDataRequest")
             request.set("periodicityAdjustment", "ACTUAL")
-            request.set("periodicitySelection", "YEARLY")
+            request.set("periodicitySelection", periodicity)
             request.set("startDate", f"{start_year}0101")
-            request.set("endDate", f"{end_year}0101")
+            request.set("endDate", f"{end_year}1231")
             request.append(SECURITIES, ticker)
             for field in fields:
                 request.append(FIELDS, field)
@@ -196,4 +197,4 @@ data = data.groupby('Date').apply(
 data.dropna(inplace=True)
 
 # save processed data
-data.to_csv('processed_data.csv', index=False)
+data.to_csv(f'{PERIODICITY}_processed_data.csv', index=False)
