@@ -218,7 +218,7 @@ class NaiveModel:
         return rmse, r2
 
 
-csv_file = 'processed_data.csv'
+csv_file = 'QUARTERLY_processed_data.csv'
 
 if __name__ == "__main__":
     # Check if the file exists
