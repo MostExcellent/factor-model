@@ -76,6 +76,6 @@ df['ForwardEPS'] = forward_eps
 df['Score'] = scores
 df = df.sort_values('Score', ascending=False)
 # Save the data with the predictions
-df.to_csv('scored_data.csv', index=False)
+df.to_csv('QUARTERLY_scored_data.csv', index=False)
 
-print("Predictions saved to 'scored_data.csv'")
+print("Predictions saved to 'QUARTERLY_scored_data.csv'")
