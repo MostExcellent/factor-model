@@ -46,25 +46,32 @@ def clean_data(df):
 def process_factors(df):
     """
     Process factors for a given pandas dataframe by creating new columns for each factor,
-    normalizing each factor within each year, and returning a copy of the dataframe with the new columns.
+    and returning a copy of the dataframe with the new columns.
     """
     print("Processing factors...")
     df_copy = df.copy()
 
-    # shift returns back one year
-    df_copy['Momentum'] = df_copy.groupby(
-        'Ticker')['ForwardReturn'].transform(lambda x: x.shift(1))
     df_copy['Size'] = df_copy['CUR_MKT_CAP']
     df_copy['Value'] = df_copy['BOOK_VAL_PER_SH'] / df_copy['PX_LAST']
     df_copy['ROE'] = df_copy['RETURN_COM_EQY']
     df_copy['FCF'] = df_copy['CF_FREE_CASH_FLOW'] / df_copy['CUR_MKT_CAP']
 
+    df_copy = df_copy.dropna()
+    return df_copy
+
+def normalize_factors(df):
+    """
+    Normalize factors within each year and return a copy of the dataframe with the new columns.
+    """
+    print("Normalizing factors...")
+    df_copy = df.copy()
+
     # Normalize within each year
     for col in ['Momentum', 'Size', 'Value', 'ROE', 'FCF', 'IS_EPS', 'PE_RATIO', 'EPS_GROWTH', 'SALES_GROWTH', 'OPER_MARGIN', 'PROF_MARGIN']:
         df_copy[f'{col}Norm'] = df_copy.groupby(
             ['Date'])[col].transform(normalize)
-        
-    df_copy = df_copy.dropna()    
+
+    df_copy = df_copy.dropna()
     return df_copy
 
 
@@ -79,7 +86,7 @@ class RFEnsemble:
         self.models = []
         self.feature_importances = []
 
-    def optimize_params(self, x, y, method=GridSearchCV, param_grid=None):
+    def optimize_params(self, x, y, method=GridSearchCV, param_grid=None, save_params=False):
         """
         Optimize the hyperparameters of the random forest regressor using the given method and parameter grid.
         """
@@ -98,8 +105,15 @@ class RFEnsemble:
         best_params = optimizer.best_params_
         print(f"Best parameters: {best_params}")
         self.params = best_params
+        if save_params:
+            with open(save_params, 'wb') as f:
+                pickle.dump(best_params, f)
 
-    def train(self, x_train, y_train):
+    def load_params(self, path):
+        with open(path, 'rb') as f:
+            self.params = pickle.load(f)
+    
+    def train(self, x_train, y_train, save_params=None):
         """
         Train the random forest ensemble on the given training data.
         """
@@ -113,7 +127,10 @@ class RFEnsemble:
                 'min_samples_leaf': [1, 2, 4, 8, 16],
                 'max_features': [1.0, 'sqrt', 'log2']
             }
-            self.optimize_params(x_train, y_train, param_grid=param_grid)
+            self.optimize_params(x_train, y_train, param_grid=param_grid, save_params=save_params)
+        if save_params:
+            with open(save_params, 'wb') as f:
+                pickle.dump(self.params, f)
         for _ in range(self.num_models):
             model = RandomForestRegressor(**self.params)
             model.fit(x_train, y_train)
@@ -222,6 +239,12 @@ class NaiveModel:
 csv_file = 'processed_data.csv'
 
 if __name__ == "__main__":
+    store_params = None
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--load_params', type=str, help='Load the best hyperparameters from a file.')
+    args = parser.parse_args()
+    store_params = args.load_params
+
     # Check if the file exists
     if os.path.isfile(csv_file):
         df = pd.read_csv(csv_file)
@@ -231,7 +254,6 @@ if __name__ == "__main__":
     else:
         print(f"File {csv_file} not found. Exiting...")
         exit()
-
 
     # Check if the file exists
     if os.path.isfile(csv_file):
@@ -243,18 +265,24 @@ if __name__ == "__main__":
     # df['Year'] = pd.to_datetime(df['Date']).dt.year
     # print(df['Year'].values)
     # df.drop('Date', axis=1, inplace=True)
-    df.sort_values(by=['Ticker'], inplace=True, ascending=False)
-    df.sort_values(by=['Date'], inplace=True, ascending=True)
+    df.sort_values(by=['Ticker', 'Date'], inplace=True, ascending=True)
+    # df.sort_values(by=['Date'], inplace=True, ascending=True)
     df['ForwardReturn'] = df.groupby('Ticker')['PX_LAST'].pct_change(1)
+    df['Momentum'] = df.groupby('Ticker')['PX_LAST'].pct_change(1)
     df['ForwardReturn'] = df.groupby('Ticker')['ForwardReturn'].shift(-1)
-    # print(df.head())
-    df.dropna(subset=['ForwardReturn'], inplace=True)
+    df['ForwardEPS'] = df.groupby('Ticker')['IS_EPS'].shift(-1)
     # df['ForwardReturnNorm'] = df.groupby('Date')['ForwardReturn'].transform(normalize)
+    df.dropna(subset=['ForwardReturn'], inplace=True)
+    df.dropna(subset=['Momentum'], inplace=True)
+    df.dropna(subset=['ForwardEPS'], inplace=True)
 
     # Log returns
     df['LogReturn'] = np.log(df['ForwardReturn'] + 1)
     # df.dropna(subset=['LogReturn', 'ForwardReturn'], inplace=True)
     df['LogReturnNorm'] = df.groupby('Date')['LogReturn'].transform(normalize)
+
+    df['ForwardEPSNorm'] = df.groupby(
+        'Date')['ForwardEPS'].transform(normalize)
 
     df_grouped = process_factors(df)
     # factors = [col[:-4] for col in df_grouped.columns if col.endswith('Norm') and col != 'LogReturnNorm']
@@ -262,9 +290,8 @@ if __name__ == "__main__":
     df_grouped.reset_index(drop=True, inplace=True)
 
     target = 'LogReturnNorm'
-    features = [col for col in df_grouped.columns if col.endswith('Norm') and col != target]
-
-    #target = 'LogReturn'
+    features = [col for col in df_grouped.columns if col.endswith(
+        'Norm') and col != 'LogReturnNorm' and col != 'ForwardReturnNorm' and col != 'ForwardEPSNorm']
 
     # print number of nans in a column if it has any
     for feature in features:
@@ -284,8 +311,11 @@ if __name__ == "__main__":
         x, y, test_size=0.2, random_state=42)
 
     model = RFEnsemble()
-    print(type(model))
-    model.train(x_train, y_train)
+    if store_params:
+        model.load_params(store_params)
+
+    # print(type(model))
+    model.train(x_train, y_train, save_params='best_params.pkl')
     y_pred, rmse, r2 = model.test(x_test, y_test)
 
     model.save('ensemble.pkl')
