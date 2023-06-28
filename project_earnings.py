@@ -1,4 +1,3 @@
-
 import argparse
 import os
 import pickle
@@ -249,13 +248,13 @@ class NaiveModel:
 csv_file = 'processed_data.csv'
 
 if __name__ == "__main__":
-    store_params = None
+    param_file = None
     parser = argparse.ArgumentParser()
     parser.add_argument('--no-bootstrap', action='store_true',
                         help='Exit script before bootstrap analysis')
     parser.add_argument('--load_params', type=str, help='Load the best hyperparameters from a file.')
     args = parser.parse_args()
-    store_params = args.load_params
+    param_file = args.load_params
 
     # Check if the file exists
     if os.path.isfile(csv_file):
@@ -321,25 +320,26 @@ if __name__ == "__main__":
     x = df[raw_cols]
     y = df[target]
 
-    print(x.shape)
-    print(y.shape)
-    print(x.head())
-    print(y.head())
+    # print(x.shape)
+    # print(y.shape)
+    # print(x.head())
+    # print(y.head())
 
     x_train, x_test, y_train, y_test = train_test_split(
         x, y, test_size=0.2, random_state=42)
     x_train = normalize_factors(x_train)
     x_test = normalize_factors(x_test)
-    print(x_train.head())
-    print(x_test.head())
+    # print(x_train.head())
+    # print(x_test.head())
     # Drop Date column
     x_train.drop('Date', axis=1, inplace=True)
     x_test.drop('Date', axis=1, inplace=True)
     model = RFEnsemble()
-    if store_params:
-        model.load_params(store_params)
+    if param_file:
+        model.load_params(param_file)
     
     # print(type(model))
+    print('Training model...')
     model.train(x_train, y_train, save_params='eps_params.pkl')
     y_pred, rmse, r2 = model.test(x_test, y_test)
 

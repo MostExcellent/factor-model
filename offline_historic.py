@@ -1,4 +1,3 @@
-
 import argparse
 import os
 import pickle
@@ -85,6 +84,7 @@ class RFEnsemble:
         self.params = params
         self.models = []
         self.feature_importances = []
+        self.features = []
 
     def optimize_params(self, x, y, method=GridSearchCV, param_grid=None, save_params=False):
         """
@@ -119,7 +119,6 @@ class RFEnsemble:
         """
         if self.params is None:
             # Hyperparameter tuning
-            # Define the parameter grid
             param_grid = {
                 'n_estimators': [10, 50, 100, 200, 300],
                 'max_depth': [None, 10, 20, 30, 40, 50],
@@ -136,12 +135,19 @@ class RFEnsemble:
             model.fit(x_train, y_train)
             self.models.append(model)
             self.feature_importances.append(model.feature_importances_)
+            self.features = list(set(x_train.columns.tolist()))
 
     def get_feature_importances(self):
         """
         Get the mean feature importances of the trained random forest ensemble.
         """
         return np.mean(self.feature_importances, axis=0)
+
+    def get_features(self):
+        """
+        Get the list of feature names used to train the random forest ensemble.
+        """
+        return self.features
 
     def predict(self, x_test):
         """
@@ -239,11 +245,13 @@ class NaiveModel:
 csv_file = 'processed_data.csv'
 
 if __name__ == "__main__":
-    store_params = None
+    param_file = None
     parser = argparse.ArgumentParser()
+    parser.add_argument('--no-bootstrap', action='store_true',
+                        help='Exit script before bootstrap analysis')
     parser.add_argument('--load_params', type=str, help='Load the best hyperparameters from a file.')
     args = parser.parse_args()
-    store_params = args.load_params
+    param_file = args.load_params
 
     # Check if the file exists
     if os.path.isfile(csv_file):
@@ -284,37 +292,48 @@ if __name__ == "__main__":
     df['ForwardEPSNorm'] = df.groupby(
         'Date')['ForwardEPS'].transform(normalize)
 
-    df_grouped = process_factors(df)
-    # factors = [col[:-4] for col in df_grouped.columns if col.endswith('Norm') and col != 'LogReturnNorm']
-    # print(df_grouped[factors + ['LogReturnsNorm']].isnull().sum())
-    df_grouped.reset_index(drop=True, inplace=True)
+    # df = process_factors(df)
+    # factors = [col[:-4] for col in df.columns if col.endswith('Norm') and col != 'LogReturnNorm']
+    # print(df[factors + ['LogReturnsNorm']].isnull().sum())
+    # df.reset_index(drop=True, inplace=True)
 
     target = 'LogReturnNorm'
-    features = [col for col in df_grouped.columns if col.endswith(
-        'Norm') and col != 'LogReturnNorm' and col != 'ForwardReturnNorm' and col != 'ForwardEPSNorm']
+    # features = [col for col in df.columns if col.endswith(
+    #     'Norm') and col != 'LogReturnNorm' and col != 'ForwardReturnNorm' and col != 'ForwardEPSNorm']
+    df = process_factors(df)
+
+    raw_cols = ['Date', 'Momentum', 'Size', 'Value', 'ROE', 'FCF', 'IS_EPS', 'PE_RATIO', 'EPS_GROWTH', 'SALES_GROWTH', 'OPER_MARGIN', 'PROF_MARGIN']
+    features = [feature + 'Norm' for feature in raw_cols if feature != 'Date']
 
     # print number of nans in a column if it has any
-    for feature in features:
-        feature_nan_sum = df_grouped[feature].isnull().sum()
-        if feature_nan_sum > 0:
-            print(f'{feature} has {feature_nan_sum} nans')
+    # for feature in features:
+    #     feature_nan_sum = df[feature].isnull().sum()
+    #     if feature_nan_sum > 0:
+    #         print(f'{feature} has {feature_nan_sum} nans')
 
-    x = df_grouped[features]
-    y = df_grouped[target]
+    x = df[raw_cols]
+    y = df[target]
 
-    print(x.shape)
-    print(y.shape)
-    print(x.head())
-    print(y.head())
+    # print(x.shape)
+    # print(y.shape)
+    # print(x.head())
+    # print(y.head())
 
     x_train, x_test, y_train, y_test = train_test_split(
         x, y, test_size=0.2, random_state=42)
-
+    x_train = normalize_factors(x_train)
+    x_test = normalize_factors(x_test)
+    # print(x_train.head())
+    # print(x_test.head())
+    # Drop Date column
+    x_train.drop('Date', axis=1, inplace=True)
+    x_test.drop('Date', axis=1, inplace=True)
     model = RFEnsemble()
-    if store_params:
-        model.load_params(store_params)
+    if param_file:
+        model.load_params(param_file)
 
     # print(type(model))
+    print('Training model...')
     model.train(x_train, y_train, save_params='best_params.pkl')
     y_pred, rmse, r2 = model.test(x_test, y_test)
 
@@ -350,11 +369,11 @@ if __name__ == "__main__":
     # Generate plots
 
     # Feature importance plot
-    feature_importances = model.get_feature_importances()
-    plt.figure(figsize=(10, 6))
-    sns.barplot(x=feature_importances, y=features)
-    plt.title('Feature Importance')
-    plt.savefig('feature_importance.png')
+    # feature_importances = model.get_feature_importances()
+    # plt.figure(figsize=(10, 6))
+    # sns.barplot(x=feature_importances, y=features)
+    # plt.title('Feature Importance')
+    # plt.savefig('feature_importance.png')
 
     # Residuals plot
     residuals = y_test - y_pred
@@ -371,7 +390,7 @@ if __name__ == "__main__":
 
     # Correlation matrix heatmap
     plt.figure(figsize=(10, 6))
-    sns.heatmap(df_grouped[features].corr(), annot=True, cmap='coolwarm')
+    sns.heatmap(df[features].corr(), annot=True, cmap='coolwarm')
     plt.title('Correlation Matrix')
     plt.savefig('correlation_matrix.png')
 
@@ -387,11 +406,6 @@ if __name__ == "__main__":
     plt.ylabel('Predicted Returns')
     plt.title('Predicted vs. Actual Returns')
     plt.savefig('predicted_vs_actual.png')
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--no-bootstrap', action='store_true',
-                        help='Exit script before bootstrap analysis')
-    args = parser.parse_args()
 
     if args.no_bootstrap:
         exit()
