@@ -356,10 +356,10 @@ if __name__ == "__main__":
     best_fit_line = np.poly1d([slope, 0])
     x_values = np.linspace(min(y_test), max(y_test), 100)
     plt.plot(x_values, best_fit_line(x_values), color='red')
-    plt.xlabel('Actual Returns')
-    plt.ylabel('Predicted Returns')
+    plt.xlabel('Actual EPS')
+    plt.ylabel('Predicted EPS')
     plt.title('Predicted vs. Actual Returns')
-    plt.savefig('predicted_vs_actual.png')
+    plt.savefig('eps_predicted_vs_actual.png')
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--no-bootstrap', action='store_true',
