@@ -53,7 +53,7 @@ def event_loop(e_session, timeout=7000):
         # type: ignore
         # type: ignore
         # type: ignore
-        if event.eventType() in [blpapi.Event.PARTIAL_RESPONSE, blpapi.Event.RESPONSE]:
+        if event.eventType() in [blpapi.Event.PARTIAL_RESPONSE, blpapi.Event.RESPONSE]: # type: ignore
             break
         if time.time() > deadline:
             break
@@ -124,10 +124,10 @@ def get_data(fields, start_year, end_year):
         try:
             request = ref_data_service.createRequest(
                 "HistoricalDataRequest")
-            request.set("periodicityAdjustment", "ACTUAL")
-            request.set("periodicitySelection", "YEARLY")
-            request.set("startDate", f"{start_year}0101")
-            request.set("endDate", f"{end_year}0101")
+            request.set(PERIODICITY_ADJUSTMENT, "ACTUAL")
+            request.set(PERIODICITY_SELECTION, "YEARLY")
+            request.set(START_DATE, f"{start_year}0101")
+            request.set(END_DATE, f"{end_year}0101")
             request.append(SECURITIES, ticker)
             for field in fields:
                 request.append(FIELDS, field)
