@@ -62,7 +62,7 @@ df = pd.read_csv(csv_file)
 df = process_factors(df)
 
 # Define features
-features = features = [col for col in df.columns if col.endswith('Norm')]
+features = [col for col in df.columns if col.endswith('Norm')]
 
 # Load the model
 print("Loading model...")

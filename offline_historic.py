@@ -98,6 +98,7 @@ class RFEnsemble:
         best_params = optimizer.best_params_
         print(f"Best parameters: {best_params}")
         self.params = best_params
+        return best_params
 
     def train(self, x_train, y_train):
         """
@@ -113,7 +114,7 @@ class RFEnsemble:
                 'min_samples_leaf': [1, 2, 4, 8, 16],
                 'max_features': [1.0, 'sqrt', 'log2']
             }
-            self.optimize_params(x_train, y_train, param_grid=param_grid)
+            self.params = self.optimize_params(x_train, y_train, param_grid=param_grid)
         for _ in range(self.num_models):
             model = RandomForestRegressor(**self.params)
             model.fit(x_train, y_train)

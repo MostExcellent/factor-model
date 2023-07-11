@@ -60,9 +60,9 @@ def process_factors(df):
     df_copy['FCF'] = df_copy['CF_FREE_CASH_FLOW'] / df_copy['CUR_MKT_CAP']
 
     # Normalize within each year
-    for col in ['Momentum', 'Size', 'Value', 'ROE', 'FCF', 'IS_EPS', 'PE_RATIO', 'EPS_GROWTH', 'SALES_GROWTH', 'OPER_MARGIN', 'PROF_MARGIN']:
-        df_copy[f'{col}Norm'] = df_copy.groupby(
-            ['Date'])[col].transform(normalize)
+    # for col in ['Momentum', 'Size', 'Value', 'ROE', 'FCF', 'IS_EPS', 'PE_RATIO', 'EPS_GROWTH', 'SALES_GROWTH', 'OPER_MARGIN', 'PROF_MARGIN']:
+    #     df_copy[f'{col}Norm'] = df_copy.groupby(
+    #         ['Date'])[col].transform(normalize)
         
     df_copy = df_copy.dropna()    
     return df_copy
@@ -98,10 +98,12 @@ class RFEnsemble:
         print(f"Best parameters: {best_params}")
         self.params = best_params
 
-    def train(self, x_train, y_train):
+    def train(self, x_train, y_train, save_params=False, load_params=None):
         """
         Train the random forest ensemble on the given training data.
         """
+        if load_params:
+            self.params = load_params
         if self.params is None:
             # Hyperparameter tuning
             # Define the parameter grid
@@ -118,6 +120,9 @@ class RFEnsemble:
             model.fit(x_train, y_train)
             self.models.append(model)
             self.feature_importances.append(model.feature_importances_)
+        if save_params:
+            with open('eps_params.pkl', 'wb') as f:
+                pickle.dump(self.params, f)
 
     def get_feature_importances(self):
         """
@@ -221,6 +226,11 @@ class NaiveModel:
 csv_file = 'processed_data.csv'
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--no-bootstrap', action='store_true',
+                        help='Exit script before bootstrap analysis')
+    parser.add_argument('--load_params', action='store_true',)
+    args = parser.parse_args()
     # Check if the file exists
     if os.path.isfile(csv_file):
         df = pd.read_csv(csv_file)
@@ -265,8 +275,7 @@ if __name__ == "__main__":
     df_grouped.reset_index(drop=True, inplace=True)
 
     target = 'ForwardEPS'
-    features = [col for col in df_grouped.columns if col.endswith('Norm') and col != 'LogReturnNorm' and col != 'ForwardReturnNorm' and col != 'ForwardEPSNorm']
-
+    features = ['Momentum', 'Size', 'Value', 'ROE', 'FCF', 'IS_EPS', 'PE_RATIO', 'EPS_GROWTH', 'SALES_GROWTH', 'OPER_MARGIN', 'PROF_MARGIN']
     #target = 'LogReturn'
 
     # print number of nans in a column if it has any
@@ -288,7 +297,11 @@ if __name__ == "__main__":
 
     model = RFEnsemble()
     print(type(model))
-    model.train(x_train, y_train)
+    loaded_params = None
+    if args.load_params:
+        with open('eps_params.pkl', 'rb') as f:
+            loaded_params = pickle.load(f)
+    model.train(x_train, y_train, save_params=True) if not args.load_params else model.train(x_train, y_train, load_params=loaded_params)
     y_pred, rmse, r2 = model.test(x_test, y_test)
 
     model.save('earnings_ensemble.pkl')
