@@ -63,7 +63,7 @@ df = process_factors(df)
 
 # Define features
 features = [col for col in df.columns if col.endswith('Norm')]
-
+features_eps = ['Momentum', 'Size', 'Value', 'ROE', 'FCF', 'IS_EPS', 'PE_RATIO', 'EPS_GROWTH', 'SALES_GROWTH', 'OPER_MARGIN', 'PROF_MARGIN']
 # Load the model
 print("Loading model...")
 model = RFEnsemble().load(model_file)
@@ -71,7 +71,7 @@ eps_model = RFEnsemble().load(eps_model_file)
 
 # Make predictions
 scores = model.predict(df[features])
-forward_eps = eps_model.predict(df[features])
+forward_eps = eps_model.predict(df[features_eps])
 df['ForwardEPS'] = forward_eps
 df['Score'] = scores
 df = df.sort_values('Score', ascending=False)
